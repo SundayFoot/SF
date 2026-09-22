@@ -1,0 +1,10 @@
+{
+  "name": "Sunday Football",
+  "short_name": "Sunday Football",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b1020",
+  "theme_color": "#111827",
+  "description": "Gestionnaire de tournoi de football du dimanche",
+  "icons": []
+}

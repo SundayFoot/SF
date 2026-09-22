@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Sunday Football">
+  <title>Sunday Football</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+</head>
+<body>
+  <main class="app">
+    <section id="accessScreen" class="screen">
+      <div class="card access-card">
+        <h1>⚽ Sunday Football</h1>
+        <p class="muted">Choisis comment tu veux accéder au tournoi.</p>
+        <div class="access-grid">
+          <button id="adminAccessBtn" class="primary full">🔐 Admin</button>
+          <button id="liveAccessBtn" class="secondary full">👀 Live match</button>
+          <button id="registerAccessBtn" class="secondary full">📝 S'inscrire pour dimanche</button>
+        </div>
+        <div id="adminLoginBox" class="hidden login-box">
+          <label>Code administrateur
+            <input id="adminPassword" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Code administrateur">
+          </label>
+          <button id="adminLoginBtn" class="primary full">Entrer</button>
+          <button id="backAccessBtn" class="secondary full">Retour</button>
+          <p id="loginMessage" class="muted small"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="registrationScreen" class="screen hidden">
+      <div class="card access-card">
+        <div class="topbar-inline">
+          <div><h2>📝 Inscription joueurs</h2><p id="registrationStatus" class="muted">Vérification des inscriptions...</p></div>
+          <button id="registrationBackBtn" class="secondary">Accueil</button>
+        </div>
+        <div id="registrationFormBox" class="registration-form-box hidden">
+          <label>Ton nom / prénom
+            <input id="registrationName" type="text" maxlength="60" placeholder="Ex. Yassine" autocomplete="name">
+          </label>
+          <button id="registerPlayerBtn" class="primary full">✅ Je m'inscris</button>
+        </div>
+        <div id="registrationClosedBox" class="hidden">
+          <p class="muted">Les inscriptions sont actuellement fermées. Demande à l'administrateur de les ouvrir.</p>
+        </div>
+        <div class="registration-list-box">
+          <div class="section-title">👥 Joueurs inscrits <span id="registrationCount" class="badges"></span></div>
+          <div id="publicRegistrationList"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="liveScreen" class="screen hidden">
+      <div class="card">
+        <div class="topbar-inline"><div><h2>👀 Live Match</h2><p id="liveConnection" class="muted">Connexion...</p></div><button id="liveBackBtn" class="secondary">Accueil</button></div>
+      </div>
+      <div id="liveContent"></div>
+    </section>
+    <header class="topbar">
+      <div>
+        <h1>⚽ Sunday Football</h1>
+        <p id="saveStatus">Sauvegarde locale activée</p>
+      </div>
+      <div class="topbar-actions">
+        <button id="manageTeamsBtn" class="secondary admin-only">👥 Équipes & joueurs</button>
+        <button id="newTournamentBtn" class="secondary admin-only">Nouveau</button>
+      </div>
+    </header>
+
+    <section id="setupScreen" class="screen hidden">
+      <div class="card">
+        <h2>Nouveau tournoi</h2>
+        <p class="muted">Configure les équipes avant de commencer. Les données sont sauvegardées automatiquement sur ce téléphone.</p>
+
+        <div class="grid two">
+          <label>
+            Nombre d'équipes
+            <select id="teamCount">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4" selected>4</option>
+            </select>
+          </label>
+          <label>
+            Durée des matchs de classement
+            <select id="matchMinutes">
+              <option value="5" selected>5 minutes</option>
+              <option value="7">7 minutes</option>
+              <option value="10">10 minutes</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="team-count-actions">
+          <button type="button" id="addTeamBtn" class="secondary">＋ Ajouter une équipe</button>
+          <button type="button" id="removeTeamBtn" class="secondary">− Supprimer une équipe</button>
+        </div>
+
+        <div id="teamForm"></div>
+
+        <button id="startTournamentBtn" class="primary full">🚀 Commencer le tournoi</button>
+      </div>
+    </section>
+
+    <section id="gameScreen" class="screen hidden">
+      <div id="resumeBanner" class="card resume hidden">
+        <div>
+          <strong>Tournoi en cours retrouvé</strong>
+          <p id="resumeText" class="muted"></p>
+        </div>
+        <button id="continueBtn" class="primary">Continuer</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="card stat"><span>Match</span><strong id="matchNumber">#1</strong></div>
+        <div class="card stat"><span>Temps</span><strong id="timer">05:00</strong></div>
+        <div class="card stat"><span>Points</span><strong id="leaderPoints">0</strong></div>
+      </div>
+
+      <div id="preMatchCard" class="card pre-match">
+        <div class="match-label">PROCHAIN MATCH</div>
+        <div class="pre-match-teams">
+          <strong id="preTeamA">Équipe A</strong>
+          <span>VS</span>
+          <strong id="preTeamB">Équipe B</strong>
+        </div>
+        <p id="preMatchInfo" class="muted">Le chrono ne démarre pas encore.</p>
+        <button id="startMatchBtn" class="primary full">▶️ Commencer le match</button>
+      </div>
+
+      <div id="activeMatchCard" class="card match-card hidden">
+        <div class="match-label">MATCH EN COURS</div>
+        <div class="teams">
+          <div class="team-side">
+            <div id="teamAName" class="team-name">Équipe A</div>
+            <div id="scoreA" class="score">0</div>
+            <button id="goalABtn" class="goal">⚽ But</button>
+            <div id="playersA"></div>
+            <div id="scorersA" class="scorer-list">⚽ Aucun buteur</div>
+          </div>
+          <div class="versus">VS</div>
+          <div class="team-side">
+            <div id="teamBName" class="team-name">Équipe B</div>
+            <div id="scoreB" class="score">0</div>
+            <button id="goalBBtn" class="goal">⚽ But</button>
+            <div id="playersB"></div>
+            <div id="scorersB" class="scorer-list">⚽ Aucun buteur</div>
+          </div>
+        </div>
+
+        <div class="timer-controls">
+          <button id="pauseMatchBtn" class="secondary pause-resume-btn">⏸️ Pause chrono</button>
+          <button id="resumeMatchBtn" class="primary pause-resume-btn hidden">▶️ Reprendre</button>
+        </div>
+
+        <div class="action-grid">
+          <button id="winABtn" class="win">🏆 A gagne</button>
+          <button id="winBBtn" class="win">🏆 B gagne</button>
+        </div>
+
+        <button id="drawBtn" class="draw">🤝 Égalité — 0-0 après 5 min</button>
+        <p class="hint">Une équipe atteint 2 buts : elle gagne et reste. Si le temps expire à 0-0 : les deux sortent et les deux prochaines équipes entrent.</p>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <div class="section-title">📋 File d'attente</div>
+          <div id="queueList"></div>
+        </div>
+        <div class="card">
+          <div class="section-title">🏆 Classement</div>
+          <div id="rankingList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">⚽ Classement des buteurs</div>
+        <div id="scorerRankingList"></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">📜 Historique des matchs</div>
+        <div id="historyList"></div>
+      </div>
+
+      <div class="card tools">
+        <div class="section-title">💾 Sauvegarde</div>
+        <div class="tool-grid">
+          <button id="exportBtn" class="secondary">Exporter</button>
+          <label class="file-btn secondary">Importer
+            <input id="importInput" type="file" accept=".json,application/json">
+          </label>
+        </div>
+        <p class="muted small">La sauvegarde automatique reste sur ce téléphone. L'export crée une copie de secours.</p>
+      </div>
+
+      <div id="finalScreen" class="card hidden">
+        <div class="section-title">🏁 Phase finale</div>
+        <div id="finalContent"></div>
+      </div>
+      <div id="dashboardScreen" class="card hidden">
+        <div class="section-title">🏆 Dashboard final</div>
+        <div id="dashboardContent"></div>
+      </div>
+    </section>
+
+    <section id="manageTeamsPanel" class="manage-panel hidden" aria-label="Gestion des équipes et joueurs">
+      <div class="card manage-card">
+        <div class="topbar-inline">
+          <div>
+            <h2>👥 Équipes & joueurs</h2>
+            <p class="muted small">Modifie les joueurs du tournoi actuel sans créer un nouveau tournoi.</p>
+          </div>
+          <button id="closeManageTeamsBtn" class="secondary">Fermer</button>
+        </div>
+        <div id="manageTeamsContent"></div>
+        <div id="registrationAdminBox" class="registration-admin-box"></div>
+        <div class="manage-actions">
+          <button id="drawPlayersBtn" class="secondary">🎲 Tirage au sort des joueurs</button>
+          <button id="saveTeamPlayersBtn" class="primary">💾 Enregistrer les modifications</button>
+        </div>
+      </div>
+    </section>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
