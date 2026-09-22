@@ -244,3 +244,76 @@ begin
   alter publication supabase_realtime add table public.player_registrations;
 exception when duplicate_object then null;
 end $$;
+
+-- V6.7 admin registration RPCs: keep the registration controls server-side
+-- and avoid depending on direct UPDATE/DELETE permissions from the browser.
+create or replace function public.set_registration_open(p_is_open boolean)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(auth.jwt() ->> 'email', '') <> 'abde-ghafor@hotmail.fr' then
+    raise exception 'Accès administrateur refusé.';
+  end if;
+
+  update public.registration_settings
+  set is_open = coalesce(p_is_open, false), updated_at = now()
+  where id = 'current';
+
+  if not found then
+    insert into public.registration_settings (id, is_open)
+    values ('current', coalesce(p_is_open, false));
+  end if;
+
+  return true;
+end;
+$$;
+
+grant execute on function public.set_registration_open(boolean) to authenticated;
+
+create or replace function public.clear_registrations()
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(auth.jwt() ->> 'email', '') <> 'abde-ghafor@hotmail.fr' then
+    raise exception 'Accès administrateur refusé.';
+  end if;
+
+  delete from public.player_registrations where event_id = 'current';
+  update public.registration_settings
+  set is_open = false, updated_at = now()
+  where id = 'current';
+  return true;
+end;
+$$;
+
+grant execute on function public.clear_registrations() to authenticated;
+
+create or replace function public.delete_registration(p_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if coalesce(auth.jwt() ->> 'email', '') <> 'abde-ghafor@hotmail.fr' then
+    raise exception 'Accès administrateur refusé.';
+  end if;
+
+  delete from public.player_registrations
+  where id = p_id and event_id = 'current';
+  return true;
+end;
+$$;
+
+grant execute on function public.delete_registration(uuid) to authenticated;
+
+
+-- V6.10 compatibility: browser writes are protected by RLS.
+-- The app no longer requires the custom registration RPCs.
+-- Re-running this file is safe because policies are recreated with the same names.

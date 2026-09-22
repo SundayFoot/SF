@@ -26,7 +26,7 @@
         </div>
         <div id="adminLoginBox" class="hidden login-box">
           <label>Code administrateur
-            <input id="adminPassword" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Code administrateur">
+            <input id="adminPassword" type="password" inputmode="text" autocapitalize="none" spellcheck="false" autocomplete="current-password" placeholder="Code administrateur">
           </label>
           <button id="adminLoginBtn" class="primary full">Entrer</button>
           <button id="backAccessBtn" class="secondary full">Retour</button>
@@ -63,16 +63,39 @@
       </div>
       <div id="liveContent"></div>
     </section>
-    <header class="topbar">
+    <header id="appTopbar" class="topbar hidden">
       <div>
         <h1>⚽ Sunday Football</h1>
         <p id="saveStatus">Sauvegarde locale activée</p>
       </div>
       <div class="topbar-actions">
+        <button id="homeDashboardBtn" class="secondary admin-only">🏠 Accueil</button>
+        <button id="topRegistrationBtn" class="secondary admin-only">📝 Inscriptions</button>
         <button id="manageTeamsBtn" class="secondary admin-only">👥 Équipes & joueurs</button>
-        <button id="newTournamentBtn" class="secondary admin-only">Nouveau</button>
+        <button id="newTournamentBtn" class="secondary admin-only">⚽ Nouveau</button>
       </div>
     </header>
+
+    <section id="dashboardPage" class="screen hidden">
+      <div class="card dashboard-card">
+        <div class="topbar-inline">
+          <div>
+            <h2>🏠 Dashboard</h2>
+            <p class="muted">Accueil administrateur — chaque fonction est dans sa propre page.</p>
+          </div>
+          <button id="dashboardLogoutBtn" class="secondary">🔐 Déconnexion</button>
+        </div>
+
+        <div class="dashboard-actions">
+          <button id="dashboardRegistrationBtn" class="primary full">📝 Inscriptions du dimanche</button>
+          <button id="dashboardNewTournamentBtn" class="secondary full">⚽ Nouveau tournoi</button>
+          <button id="dashboardTeamsBtn" class="secondary full">👥 Équipes & joueurs</button>
+          <button id="dashboardCurrentTournamentBtn" class="secondary full">🏟️ Tournoi en cours</button>
+        </div>
+
+        <div id="dashboardTournamentInfo" class="dashboard-info"></div>
+      </div>
+    </section>
 
     <section id="setupScreen" class="screen hidden">
       <div class="card">
@@ -103,9 +126,24 @@
           <button type="button" id="removeTeamBtn" class="secondary">− Supprimer une équipe</button>
         </div>
 
+        <button type="button" id="openRegistrationAdminBtn" class="secondary full registration-entry-btn admin-only">📝 Inscriptions du dimanche</button>
+
         <div id="teamForm"></div>
 
         <button id="startTournamentBtn" class="primary full">🚀 Commencer le tournoi</button>
+      </div>
+    </section>
+
+    <section id="registrationAdminScreen" class="screen hidden">
+      <div class="card registration-admin-page">
+        <div class="topbar-inline">
+          <div>
+            <h2>📝 Inscriptions du dimanche</h2>
+            <p class="muted small">Ouvre les inscriptions, consulte la liste et prépare les équipes avant de créer le tournoi.</p>
+          </div>
+          <button id="registrationAdminBackBtn" class="secondary">← Retour</button>
+        </div>
+        <div id="registrationAdminContent"></div>
       </div>
     </section>
 
@@ -125,6 +163,7 @@
       </div>
 
       <div id="preMatchCard" class="card pre-match">
+        <div id="matchAnnouncement" class="match-announcement hidden" aria-live="polite"></div>
         <div class="match-label">PROCHAIN MATCH</div>
         <div class="pre-match-teams">
           <strong id="preTeamA">Équipe A</strong>
@@ -211,17 +250,16 @@
       </div>
     </section>
 
-    <section id="manageTeamsPanel" class="manage-panel hidden" aria-label="Gestion des équipes et joueurs">
+    <section id="manageTeamsPanel" class="screen hidden" aria-label="Gestion des équipes et joueurs">
       <div class="card manage-card">
         <div class="topbar-inline">
           <div>
             <h2>👥 Équipes & joueurs</h2>
             <p class="muted small">Modifie les joueurs du tournoi actuel sans créer un nouveau tournoi.</p>
           </div>
-          <button id="closeManageTeamsBtn" class="secondary">Fermer</button>
+          <button id="closeManageTeamsBtn" class="secondary">🏠 Retour dashboard</button>
         </div>
         <div id="manageTeamsContent"></div>
-        <div id="registrationAdminBox" class="registration-admin-box"></div>
         <div class="manage-actions">
           <button id="drawPlayersBtn" class="secondary">🎲 Tirage au sort des joueurs</button>
           <button id="saveTeamPlayersBtn" class="primary">💾 Enregistrer les modifications</button>

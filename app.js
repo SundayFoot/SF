@@ -52,9 +52,11 @@ function editTeamPlayers(teamId) {
     teamForm: $("teamForm"),
     startTournamentBtn: $("startTournamentBtn"),
     newTournamentBtn: $("newTournamentBtn"),
+    openRegistrationAdminBtn: $("openRegistrationAdminBtn"),
     manageTeamsBtn: $("manageTeamsBtn"),
     drawPlayersBtn: $("drawPlayersBtn"),
-    registrationAdminBox: $("registrationAdminBox"),
+    registrationAdminScreen: $("registrationAdminScreen"),
+    registrationAdminContent: $("registrationAdminContent"),
     registrationScreen: $("registrationScreen"),
     registrationStatus: $("registrationStatus"),
     registrationFormBox: $("registrationFormBox"),
@@ -98,13 +100,58 @@ function editTeamPlayers(teamId) {
     finalContent: $("finalContent"),
     dashboardScreen: $("dashboardScreen"),
     dashboardContent: $("dashboardContent"),
+    appTopbar: $("appTopbar"),
+    dashboardPage: $("dashboardPage"),
+    dashboardRegistrationBtn: $("dashboardRegistrationBtn"),
+    dashboardNewTournamentBtn: $("dashboardNewTournamentBtn"),
+    dashboardTeamsBtn: $("dashboardTeamsBtn"),
+    dashboardCurrentTournamentBtn: $("dashboardCurrentTournamentBtn"),
+    dashboardTournamentInfo: $("dashboardTournamentInfo"),
+    homeDashboardBtn: $("homeDashboardBtn"),
     toast: $("toast")
   };
 
   let state = null;
   let timerId = null;
 
-  const defaultNames = ["Rouge", "Vert", "Jaune", "Bleu", "Sans maillot", "Noir", "Blanc", "Orange"];
+  const defaultNames = ["Rouge", "Vert", "Jaune", "Bleu", "Orange", "Violet", "Noir", "Blanc"];
+  const defaultColors = ["#ef4444", "#22c55e", "#eab308", "#3b82f6", "#f97316", "#a855f7", "#111827", "#f8fafc"];
+  const teamColorChoices = [
+    ["#ef4444", "Rouge"], ["#22c55e", "Vert"], ["#eab308", "Jaune"], ["#3b82f6", "Bleu"],
+    ["#f97316", "Orange"], ["#a855f7", "Violet"], ["#111827", "Noir"], ["#f8fafc", "Blanc"]
+  ];
+  function teamColorOptions(selected) {
+    const safe = teamColorChoices.some(([value]) => value === selected) ? selected : defaultColors[0];
+    return teamColorChoices.map(([value, label]) => `<option value="${value}" ${value === safe ? "selected" : ""}>${label}</option>`).join("");
+  }
+  function getTeamColor(team, index = 0) {
+    const color = team?.color;
+    return teamColorChoices.some(([value]) => value === color) ? color : defaultColors[index % defaultColors.length];
+  }
+  function vibrate(pattern = [80]) {
+    try {
+      if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate(pattern);
+    } catch {}
+  }
+  function showMatchAnnouncement(teamIds, label = "Entre") {
+    const box = document.getElementById("matchAnnouncement");
+    if (!box || !state?.teams) return;
+    const ids = (Array.isArray(teamIds) ? teamIds : [teamIds]).filter(id => state.teams[id]);
+    if (!ids.length) return;
+    box.innerHTML = ids.map(id => {
+      const team = state.teams[id];
+      return `<div class="match-announcement-line"><span>⚽</span><strong style="color:${getTeamColor(team, id)}">Équipe « ${escapeHtml(team.name)} » ${label}</strong></div>`;
+    }).join("");
+    box.classList.remove("hidden");
+    clearTimeout(showMatchAnnouncement.timeout);
+    showMatchAnnouncement.timeout = setTimeout(() => box.classList.add("hidden"), 5000);
+  }
+  function migrateTeamColors() {
+    if (!state?.teams) return;
+    state.teams.forEach((team, index) => {
+      if (!team.color || !teamColorChoices.some(([value]) => value === team.color)) team.color = defaultColors[index % defaultColors.length];
+    });
+  }
 
   function escapeHtml(value) {
     return String(value ?? "")
@@ -132,7 +179,7 @@ function editTeamPlayers(teamId) {
     if (!els.teamForm) return draft;
     els.teamForm.querySelectorAll(".team-entry").forEach((entry, index) => {
       const get = (field) => entry.querySelector(`[data-field="${field}"]`)?.value || "";
-      draft[index] = { name: get("name"), captain: get("captain"), players: get("players") };
+      draft[index] = { name: get("name"), color: get("color"), captain: get("captain"), players: get("players") };
     });
     return draft;
   }
@@ -174,6 +221,11 @@ function renderTeamForm(draft = null) {
         <div class="grid">
           <label>Nom
             <input data-field="name" data-index="${i}" value="${escapeHtml(saved.name || defaultNames[i] || "Équipe " + (i + 1))}" maxlength="40">
+          </label>
+          <label>Couleur
+            <select data-field="color" data-index="${i}">
+              ${teamColorOptions(saved.color || defaultColors[i] || defaultColors[0])}
+            </select>
           </label>
           <label>Capitaine
             <input data-field="captain" data-index="${i}" value="${escapeHtml(saved.captain || "")}" placeholder="Nom du capitaine" maxlength="60">
@@ -380,17 +432,41 @@ function renderTeamForm(draft = null) {
     return data || { is_open: false };
   }
 
+  async function ensureAdminSession() {
+    if (!supabaseClient) initSupabase();
+    if (!supabaseClient) return false;
+    const { data, error } = await supabaseClient.auth.getSession();
+    if (error) { console.error("Admin session error", error); return false; }
+    return !!data?.session;
+  }
+
   async function writeRegistrationSettings(isOpen) {
-    if (!supabaseClient || accessMode !== "admin") return false;
-    const { data: sessionData } = await supabaseClient.auth.getSession();
-    if (!sessionData?.session) return false;
-    const { error } = await supabaseClient.from(REG_SETTINGS_TABLE).upsert({
-      id: REG_ROW_ID,
-      is_open: !!isOpen,
-      updated_at: new Date().toISOString()
-    }, { onConflict: "id" });
-    if (error) { console.error("Registration settings write error", error); return false; }
-    return true;
+    if (accessMode !== "admin") return false;
+    if (!(await ensureAdminSession())) {
+      showToast("🔐 Session administrateur expirée. Reconnecte-toi.");
+      return false;
+    }
+
+    // Direct UPDATE protected by Supabase RLS. This avoids relying on a custom RPC
+    // that may not yet exist in an older online/local database.
+    const { error } = await supabaseClient
+      .from(REG_SETTINGS_TABLE)
+      .update({ is_open: !!isOpen, updated_at: new Date().toISOString() })
+      .eq("id", REG_ROW_ID);
+
+    if (!error) return true;
+
+    // If the row does not exist, create it as a last resort.
+    if (/no rows|0 rows|not found/i.test(String(error.message || ""))) {
+      const { error: insertError } = await supabaseClient
+        .from(REG_SETTINGS_TABLE)
+        .insert({ id: REG_ROW_ID, is_open: !!isOpen, updated_at: new Date().toISOString() });
+      if (!insertError) return true;
+    }
+
+    console.error("Registration settings write error", error);
+    showToast(`Erreur Supabase: ${error.message || "modification impossible"}`);
+    return false;
   }
 
   async function readRegistrations() {
@@ -422,39 +498,30 @@ function renderTeamForm(draft = null) {
         ${accessMode === "admin" ? `<button type="button" class="danger-small" data-delete-registration="${escapeHtml(r.id)}">✕</button>` : ""}
       </div>`).join("");
 
-    if (accessMode === "admin") {
-      target.querySelectorAll("[data-delete-registration]").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          if (!confirm("Supprimer ce joueur de la liste des inscrits ?")) return;
-          const { error } = await supabaseClient.from(REG_TABLE).delete().eq("id", btn.dataset.deleteRegistration);
-          if (error) { console.error(error); showToast("Impossible de supprimer ce joueur."); return; }
-          await renderRegistrationAdmin();
-          showToast("Joueur supprimé de la liste.");
-        });
-      });
-    }
   }
 
   async function renderRegistrationAdmin() {
-    if (accessMode !== "admin" || !els.registrationAdminBox) return;
+    if (accessMode !== "admin" || !els.registrationAdminContent) return;
     const settings = await readRegistrationSettings();
     const rows = await readRegistrations();
     const autoPlan = registrationTeamPlan(rows.length);
     const defaultTeams = autoPlan.valid ? autoPlan.teamCount : (rows.length >= 10 ? Math.min(4, Math.floor(rows.length / 5)) : 2);
-    const defaultPlayers = autoPlan.valid ? Math.min(6, Math.floor(rows.length / Math.max(1, autoPlan.teamCount))) : 5;
-    els.registrationAdminBox.innerHTML = `
-      <div class="registration-admin-card">
+    const defaultPlayers = autoPlan.valid ? Math.min(7, Math.max(5, Math.floor(rows.length / Math.max(1, autoPlan.teamCount)))) : 5;
+    els.registrationAdminContent.innerHTML = `
+      <div class="registration-admin-card registration-admin-page-card">
         <div class="registration-admin-head">
           <div>
-            <strong>📝 Inscriptions du dimanche</strong>
-            <p class="muted small">Maximum 4 équipes, 7 joueurs par équipe. Minimum 5 joueurs par équipe.</p>
+            <strong>📝 Gestion des inscriptions</strong>
+            <p class="muted small">Maximum 4 équipes · 5 à 7 joueurs par équipe · maximum 28 inscrits.</p>
           </div>
           <span class="registration-status ${settings.is_open ? "open" : "closed"}">${settings.is_open ? "🟢 Ouvertes" : "🔴 Fermées"}</span>
         </div>
-        <div class="registration-admin-actions">
+
+        <div class="registration-admin-actions registration-admin-actions-main">
           <button id="toggleRegistrationBtn" class="${settings.is_open ? "secondary" : "primary"}">${settings.is_open ? "🔒 Fermer les inscriptions" : "📝 Ouvrir les inscriptions"}</button>
           <button id="clearRegistrationsBtn" class="secondary">🧹 Vider la liste</button>
         </div>
+
         <div class="registration-plan-box">
           <div class="section-title">⚙️ Organisation des équipes</div>
           <div class="grid two">
@@ -476,10 +543,12 @@ function renderTeamForm(draft = null) {
           <p id="registrationPlanInfo" class="muted small"></p>
           <button id="applyRegistrationPlanBtn" class="secondary full">👥 Utiliser cette configuration</button>
         </div>
-        <div class="section-title">👥 ${rows.length}/28 joueur${rows.length > 1 ? "s" : ""} inscrit${rows.length > 1 ? "s" : ""}</div>
+
+        <div class="section-title registration-list-title">👥 Joueurs inscrits <span class="badges">${rows.length}/28</span></div>
         <div id="adminRegistrationList"></div>
         <p class="muted small">La liste se ferme automatiquement à 28 inscrits.</p>
       </div>`;
+
     const listTarget = document.getElementById("adminRegistrationList");
     renderRegistrationList(rows, listTarget);
 
@@ -496,23 +565,74 @@ function renderTeamForm(draft = null) {
     updatePlanInfo();
 
     document.getElementById("applyRegistrationPlanBtn")?.addEventListener("click", applyRegistrationTeamPlan);
+    document.getElementById("createTeamsFromRegistrationsBtn")?.addEventListener("click", () => {
+      if (accessMode !== "admin") return;
+      closeRegistrationAdmin();
+      showSetup();
+      renderTeamForm();
+      showToast("⚽ Page de création des équipes ouverte.");
+    });
     document.getElementById("toggleRegistrationBtn")?.addEventListener("click", async () => {
       const next = !settings.is_open;
       if (next && rows.length >= 28) { showToast("La liste est complète (28 joueurs maximum)."); return; }
       const ok = await writeRegistrationSettings(next);
-      if (!ok) { showToast("Impossible de modifier les inscriptions."); return; }
+      if (!ok) return;
       await renderRegistrationAdmin();
       showToast(next ? "📝 Inscriptions ouvertes aux visiteurs." : "🔒 Inscriptions fermées.");
     });
     document.getElementById("clearRegistrationsBtn")?.addEventListener("click", async () => {
       if (!rows.length) { showToast("La liste est déjà vide."); return; }
       if (!confirm(`Supprimer les ${rows.length} inscriptions ?`)) return;
-      const { error } = await supabaseClient.from(REG_TABLE).delete().eq("event_id", REG_ROW_ID);
-      if (error) { console.error(error); showToast("Impossible de vider la liste."); return; }
-      await writeRegistrationSettings(false);
+      if (!(await ensureAdminSession())) { showToast("🔐 Session administrateur expirée. Reconnecte-toi."); return; }
+      let result = await supabaseClient.from(REG_TABLE).delete().eq("event_id", REG_ROW_ID);
+      if (!result.error) {
+        const settingsResult = await supabaseClient
+          .from(REG_SETTINGS_TABLE)
+          .update({ is_open: false, updated_at: new Date().toISOString() })
+          .eq("id", REG_ROW_ID);
+        if (settingsResult.error) result = settingsResult;
+      }
+      if (result.error) {
+        console.error(result.error);
+        showToast(`Erreur Supabase: ${result.error.message || "impossible de vider la liste"}`);
+        return;
+      }
       await renderRegistrationAdmin();
       showToast("✓ Liste des inscrits vidée.");
     });
+
+    els.registrationAdminContent.querySelectorAll("[data-delete-registration]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!(await ensureAdminSession())) { showToast("🔐 Session administrateur expirée. Reconnecte-toi."); return; }
+        const id = btn.dataset.deleteRegistration;
+        let result = await supabaseClient
+          .from(REG_TABLE)
+          .delete()
+          .eq("id", id)
+          .eq("event_id", REG_ROW_ID);
+        if (result.error) {
+          console.error(result.error);
+          showToast(`Erreur Supabase: ${result.error.message || "impossible de supprimer le joueur"}`);
+          return;
+        }
+        await renderRegistrationAdmin();
+        showToast("Joueur supprimé de la liste.");
+      });
+    });
+  }
+
+  async function openRegistrationAdmin() {
+    if (accessMode !== "admin") { showToast("🔒 Gestion réservée à l’administrateur."); return; }
+    hideAllMainPages();
+    els.appTopbar?.classList.remove("hidden");
+    els.registrationAdminScreen?.classList.remove("hidden");
+    await renderRegistrationAdmin();
+    subscribeRegistrationRealtime();
+  }
+
+  function closeRegistrationAdmin() {
+    if (accessMode === "admin") showDashboard();
+    else showAccess();
   }
 
   async function enterRegistrationMode() {
@@ -560,7 +680,6 @@ function renderTeamForm(draft = null) {
     if (exists) { showToast("Ce nom est déjà inscrit."); return; }
     const { error } = await supabaseClient.from(REG_TABLE).insert({ event_id: REG_ROW_ID, name });
     if (error) { console.error(error); showToast("Impossible de valider l'inscription."); return; }
-    if (rows.length + 1 >= 28) await writeRegistrationSettings(false);
     els.registrationName.value = "";
     await enterRegistrationMode();
     showToast("✓ Inscription enregistrée.");
@@ -651,11 +770,11 @@ function renderTeamForm(draft = null) {
     window._sfRegistrationChannel = supabaseClient.channel("sunday-football-registrations")
       .on("postgres_changes", { event: "*", schema: "public", table: REG_TABLE, filter: "event_id=eq.current" }, async () => {
         if (accessMode === "registration") await enterRegistrationMode();
-        if (accessMode === "admin") await renderRegistrationAdmin();
+        if (accessMode === "admin" && !els.registrationAdminScreen?.classList.contains("hidden")) await renderRegistrationAdmin();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: REG_SETTINGS_TABLE, filter: "id=eq.current" }, async () => {
         if (accessMode === "registration") await enterRegistrationMode();
-        if (accessMode === "admin") await renderRegistrationAdmin();
+        if (accessMode === "admin" && !els.registrationAdminScreen?.classList.contains("hidden")) await renderRegistrationAdmin();
       })
       .subscribe();
   }
@@ -680,10 +799,12 @@ function renderTeamForm(draft = null) {
     stopTimer();
     if (liveTimerId) { clearInterval(liveTimerId); liveTimerId = null; }
     document.getElementById("accessScreen")?.classList.remove("hidden");
+    els.appTopbar?.classList.add("hidden");
     els.setupScreen.classList.add("hidden");
     els.gameScreen.classList.add("hidden");
     document.getElementById("liveScreen")?.classList.add("hidden");
     document.getElementById("registrationScreen")?.classList.add("hidden");
+    els.registrationAdminScreen?.classList.add("hidden");
     document.getElementById("adminLoginBox")?.classList.add("hidden");
   }
 
@@ -699,10 +820,10 @@ function renderTeamForm(draft = null) {
     if (state.phaseMatch && state.phase !== "league" && state.phase !== "complete") {
       const m=state.phaseMatch, a=team(m.a), b=team(m.b);
       const phaseName=state.phase === "playoff" ? "MATCH ÉLIMINATOIRE" : state.phase === "semifinal" ? "DEMI-FINALE" : "FINALE";
-      matchHtml += `<div class="live-team-head"><div class="muted small">${phaseName}</div></div><div class="live-time" id="liveTimer">${formatTime(state.phaseSecondsLeft)}</div><div class="live-score"><div class="live-team"><strong>${escapeHtml(a?.name || "—")}</strong><div class="score">${m.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersA)}</div></div><div>VS</div><div class="live-team"><strong>${escapeHtml(b?.name || "—")}</strong><div class="score">${m.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersB)}</div></div></div><p class="muted">${state.phaseMatchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
+      matchHtml += `<div class="live-team-head"><div class="muted small">${phaseName}</div></div><div class="live-time" id="liveTimer">${formatTime(state.phaseSecondsLeft)}</div><div class="live-score"><div class="live-team"><strong style="color:${getTeamColor(a, m.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${m.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersA)}</div></div><div>VS</div><div class="live-team"><strong style="color:${getTeamColor(b, m.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${m.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersB)}</div></div></div><p class="muted">${state.phaseMatchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
     } else if (state.active) {
       const a=team(state.active.a), b=team(state.active.b);
-      matchHtml += `<div class="live-team-head"><div class="muted small">MATCH #${state.matchNumber}</div></div><div class="live-time" id="liveTimer">${formatTime(state.secondsLeft)}</div><div class="live-score"><div class="live-team"><strong>${escapeHtml(a?.name || "—")}</strong><div class="score">${state.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersA)}</div></div><div>VS</div><div class="live-team"><strong>${escapeHtml(b?.name || "—")}</strong><div class="score">${state.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersB)}</div></div></div>`;
+      matchHtml += `<div class="live-team-head"><div class="muted small">MATCH #${state.matchNumber}</div></div><div class="live-time" id="liveTimer">${formatTime(state.secondsLeft)}</div><div class="live-score"><div class="live-team"><strong style="color:${getTeamColor(a, state.active.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${state.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersA)}</div></div><div>VS</div><div class="live-team"><strong style="color:${getTeamColor(b, state.active.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${state.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersB)}</div></div></div>`;
       matchHtml += `<p class="muted">${state.matchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
     } else if (state.tournamentWinnerId !== null) {
       const w=team(state.tournamentWinnerId);
@@ -750,16 +871,16 @@ function renderTeamForm(draft = null) {
     if (error) { msg.textContent="Code incorrect ou compte administrateur non configuré."; return; }
     accessMode="admin";
     document.getElementById("accessScreen")?.classList.add("hidden");
-    els.setupScreen.classList.remove("hidden");
+    els.openRegistrationAdminBtn?.classList.remove("hidden");
     const remote=await remoteRead();
     if (remote) {
       state=remote;
-      showGame(); renderGame();
-      if(state.matchStarted && !state.timerPaused)startTimer();
+      migrateTeamColors();
     } else {
       const local=loadState();
-      if(local){state=local;showGame();renderGame();if(state.matchStarted && !state.timerPaused)startTimer();}
+      if(local){state=local;migrateTeamColors();}
     }
+    showDashboard();
     showToast("Mode administrateur activé.");
   }
 
@@ -855,6 +976,7 @@ function renderTeamForm(draft = null) {
     saveState();
     showGame();
     renderGame();
+    showMatchAnnouncement([firstA, firstB], "Entrent");
     // Intentionally paused: organizer must tap "Commencer le match".
   }
 
@@ -882,6 +1004,7 @@ function renderTeamForm(draft = null) {
     state.matchStarted = false;
     saveState();
     renderGame();
+    showMatchAnnouncement([nextId], "Entre");
     // Pause between matches. Timer starts only after explicit tap.
   }
 
@@ -916,6 +1039,7 @@ function renderTeamForm(draft = null) {
     });
 
     saveState();
+    vibrate([180, 80, 180, 80, 350]);
     startNextMatchFromWinner(winnerId, loserId);
   }
 
@@ -974,7 +1098,9 @@ function renderTeamForm(draft = null) {
     state.matchStarted = false;
 
     saveState();
+    vibrate([180, 80, 180, 80, 350]);
     renderGame();
+    showMatchAnnouncement([nextA, nextB], "Entrent");
     // Pause between matches. Timer starts only after explicit tap.
   }
 
@@ -1011,6 +1137,9 @@ function renderTeamForm(draft = null) {
     } else {
       return;
     }
+
+    // Vibration à chaque but sur téléphone.
+    vibrate([60, 35, 60]);
 
     // Sauvegarde immédiate après chaque but / buteur.
     saveState();
@@ -1097,6 +1226,7 @@ function renderTeamForm(draft = null) {
 
   function renderGame() {
     if (!state) return;
+    migrateTeamColors();
 
     els.matchNumber.textContent = state.active ? "#" + state.matchNumber : "—";
     els.timer.textContent = formatTime(state.secondsLeft);
@@ -1106,6 +1236,8 @@ function renderTeamForm(draft = null) {
       const preB = state.teams[state.active.b];
       els.preTeamA.textContent = preA?.name || "—";
       els.preTeamB.textContent = preB?.name || "—";
+      els.preTeamA.style.color = preA ? getTeamColor(preA, state.active.a) : "";
+      els.preTeamB.style.color = preB ? getTeamColor(preB, state.active.b) : "";
       els.preMatchCard.classList.toggle("hidden", !!state.matchStarted);
       els.activeMatchCard.classList.toggle("hidden", !state.matchStarted);
       els.startMatchBtn.disabled = !!state.matchStarted;
@@ -1135,6 +1267,8 @@ function renderTeamForm(draft = null) {
 
       els.teamAName.textContent = a.name;
       els.teamBName.textContent = b.name;
+      els.teamAName.style.color = getTeamColor(a, state.active.a);
+      els.teamBName.style.color = getTeamColor(b, state.active.b);
       els.scoreA.textContent = state.scoreA;
       els.scoreB.textContent = state.scoreB;
       ensureScorerState();
@@ -1151,6 +1285,8 @@ function renderTeamForm(draft = null) {
     } else {
       els.teamAName.textContent = "—";
       els.teamBName.textContent = "—";
+      els.teamAName.style.color = "";
+      els.teamBName.style.color = "";
       els.scoreA.textContent = "0";
       els.scoreB.textContent = "0";
       els.leaderPoints.textContent = sortedTeams()[0]?.points ?? 0;
@@ -1203,23 +1339,39 @@ function renderTeamForm(draft = null) {
     els.manageTeamsContent.innerHTML = state.teams.map((team, teamIndex) => {
       const players = Array.isArray(team.players) ? team.players : [];
       return `
-        <div class="manage-team-card" data-manage-team="${teamIndex}">
+        <div class="manage-team-card" data-manage-team="${teamIndex}" style="--team-color:${getTeamColor(team, teamIndex)}">
           <div class="manage-team-head">
+            <div class="manage-team-title">
+              <span class="team-color-dot" style="background:${getTeamColor(team, teamIndex)}"></span>
+              <strong style="color:${getTeamColor(team, teamIndex)}">Équipe ${escapeHtml(team.name)}</strong>
+              <span class="badges">${players.length} joueur${players.length > 1 ? "s" : ""}</span>
+            </div>
             <label class="manage-team-name">
-              <span>Équipe</span>
+              <span>Nom</span>
               <input class="manage-team-name-input" data-team-name="${teamIndex}" value="${escapeHtml(team.name)}" maxlength="40">
             </label>
-            <span class="badges">${team.points} pts</span>
+            <label class="manage-team-name">
+              <span>Couleur</span>
+              <select class="manage-team-color-select" data-team-color="${teamIndex}">
+                ${teamColorOptions(getTeamColor(team, teamIndex))}
+              </select>
+            </label>
           </div>
+
           <div class="manage-player-list" data-manage-player-list="${teamIndex}">
             ${players.length ? players.map((player, playerIndex) => `
               <div class="manage-player-row">
+                <span class="player-number">${playerIndex + 1}</span>
                 <input class="manage-player-input" data-player-name="${teamIndex}:${playerIndex}" value="${escapeHtml(player)}" maxlength="60">
-                <button type="button" class="danger-small" data-delete-player="${teamIndex}:${playerIndex}" title="Supprimer ce joueur">✕</button>
+                <button type="button" class="danger-small icon-delete" data-delete-player="${teamIndex}:${playerIndex}" title="Supprimer ${escapeHtml(player)}" aria-label="Supprimer ${escapeHtml(player)}">🗑️</button>
               </div>
-            `).join("") : `<div class="muted small">Aucun joueur.</div>`}
+            `).join("") : `<div class="muted small empty-player-list">Aucun joueur dans cette équipe.</div>`}
           </div>
-          <button type="button" class="secondary manage-add-player" data-add-manage-player="${teamIndex}">＋ Ajouter un joueur</button>
+
+          <div class="manage-add-player-row">
+            <input class="manage-new-player-input" data-new-player="${teamIndex}" maxlength="60" placeholder="Nom du nouveau joueur">
+            <button type="button" class="secondary manage-add-player" data-add-manage-player="${teamIndex}">＋ Ajouter</button>
+          </div>
         </div>
       `;
     }).join("");
@@ -1227,12 +1379,26 @@ function renderTeamForm(draft = null) {
     els.manageTeamsContent.querySelectorAll("[data-add-manage-player]").forEach(btn => {
       btn.addEventListener("click", () => {
         const teamIndex = Number(btn.dataset.addManagePlayer);
-        if (!state?.teams?.[teamIndex]) return;
-        const name = prompt(`Prénom du joueur — ${state.teams[teamIndex].name}`);
-        if (!name || !name.trim()) return;
+        const input = els.manageTeamsContent.querySelector(`[data-new-player="${teamIndex}"]`);
+        const name = input?.value.trim();
+        if (!name || !state?.teams?.[teamIndex]) return;
         if (!Array.isArray(state.teams[teamIndex].players)) state.teams[teamIndex].players = [];
-        state.teams[teamIndex].players.push(name.trim());
+        if (state.teams[teamIndex].players.length >= 7) {
+          showToast("⚠️ Maximum 7 joueurs par équipe.");
+          return;
+        }
+        state.teams[teamIndex].players.push(name);
         renderManageTeams();
+        showToast(`✓ ${name} ajouté à ${state.teams[teamIndex].name}.`);
+      });
+    });
+
+    els.manageTeamsContent.querySelectorAll("[data-new-player]").forEach(input => {
+      input.addEventListener("keydown", event => {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          input.closest(".manage-add-player-row")?.querySelector("[data-add-manage-player]")?.click();
+        }
       });
     });
 
@@ -1264,6 +1430,10 @@ function renderTeamForm(draft = null) {
         if (name) state.teams[index].name = name;
       }
     });
+    els.manageTeamsContent.querySelectorAll("[data-team-color]").forEach(select => {
+      const index = Number(select.dataset.teamColor);
+      if (state.teams[index]) state.teams[index].color = getTeamColor({color: select.value}, index);
+    });
 
     state.teams.forEach((team, teamIndex) => {
       if (!Array.isArray(team.players)) team.players = [];
@@ -1280,32 +1450,74 @@ function renderTeamForm(draft = null) {
   }
 
   function openManageTeams() {
-    if (accessMode !== "admin") {
-      showToast("🔒 Gestion réservée à l’administrateur.");
-      return;
-    }
-    renderManageTeams();
-    els.manageTeamsPanel.classList.remove("hidden");
-    renderRegistrationAdmin();
+    showTeamManagementPage();
   }
 
   function closeManageTeams() {
-    els.manageTeamsPanel.classList.add("hidden");
+    if (accessMode === "admin") showDashboard();
+    else showAccess();
+  }
+
+
+  function hideAllMainPages() {
+    stopTimer();
+    els.setupScreen?.classList.add("hidden");
+    els.gameScreen?.classList.add("hidden");
+    els.registrationAdminScreen?.classList.add("hidden");
+    els.registrationScreen?.classList.add("hidden");
+    els.dashboardPage?.classList.add("hidden");
+    els.manageTeamsPanel?.classList.add("hidden");
+    document.getElementById("liveScreen")?.classList.add("hidden");
+  }
+
+  function renderAdminDashboard() {
+    if (!els.dashboardTournamentInfo) return;
+    if (!state) {
+      els.dashboardTournamentInfo.innerHTML =
+        `<div class="card-mini"><strong>Aucun tournoi en cours.</strong><p class="muted small">Tu peux ouvrir les inscriptions ou créer un nouveau tournoi.</p></div>`;
+      return;
+    }
+    const a = state.active ? state.teams[state.active.a]?.name : "";
+    const b = state.active ? state.teams[state.active.b]?.name : "";
+    els.dashboardTournamentInfo.innerHTML =
+      `<div class="card-mini"><strong>🏟️ Tournoi actuel</strong><p class="muted small">${
+        state.phase === "complete" ? "Tournoi terminé" :
+        state.active ? `Match #${state.matchNumber} — ${escapeHtml(a || "—")} vs ${escapeHtml(b || "—")}` :
+        "Tournoi préparé"
+      }</p></div>`;
+  }
+
+  function showDashboard() {
+    if (accessMode !== "admin") { showAccess(); return; }
+    hideAllMainPages();
+    els.appTopbar?.classList.remove("hidden");
+    els.dashboardPage?.classList.remove("hidden");
+    renderAdminDashboard();
+  }
+
+  function showTeamManagementPage() {
+    if (accessMode !== "admin") { showToast("🔒 Gestion réservée à l’administrateur."); return; }
+    hideAllMainPages();
+    els.appTopbar?.classList.remove("hidden");
+    els.manageTeamsPanel?.classList.remove("hidden");
+    renderManageTeams();
   }
 
   function showGame() {
-    els.setupScreen.classList.add("hidden");
+    hideAllMainPages();
+    els.appTopbar?.classList.remove("hidden");
     els.gameScreen.classList.remove("hidden");
     els.resumeBanner.classList.add("hidden");
     if (els.manageTeamsBtn) els.manageTeamsBtn.classList.toggle("hidden", accessMode !== "admin");
     if (els.newTournamentBtn) els.newTournamentBtn.classList.toggle("hidden", accessMode !== "admin");
-    if (accessMode !== "admin") closeManageTeams();
   }
 
   function showSetup() {
     stopTimer();
-    els.gameScreen.classList.add("hidden");
+    hideAllMainPages();
+    els.appTopbar?.classList.remove("hidden");
     els.setupScreen.classList.remove("hidden");
+    els.openRegistrationAdminBtn?.classList.toggle("hidden", accessMode !== "admin");
   }
 
 
@@ -1396,6 +1608,7 @@ function renderTeamForm(draft = null) {
       return;
     }
 
+    vibrate([60, 35, 60]);
     saveState();
     renderFinals();
     const limit=phaseGoalLimit();
@@ -1408,6 +1621,7 @@ function renderTeamForm(draft = null) {
     const m=state.phaseMatch;
     const winnerId=side==="A"?m.a:m.b;
     const loserId=side==="A"?m.b:m.a;
+    vibrate([180, 80, 180, 80, 350]);
     stopPhaseTimer();
 
     if (state.phase==="playoff") {
@@ -1565,14 +1779,16 @@ function renderTeamForm(draft = null) {
     const teams = [];
     for (let i=0;i<count;i++) {
       const nameInput=els.teamForm.querySelector(`[data-field="name"][data-index="${i}"]`);
+      const colorInput=els.teamForm.querySelector(`[data-field="color"][data-index="${i}"]`);
       const captainInput=els.teamForm.querySelector(`[data-field="captain"][data-index="${i}"]`);
       const playersInput=els.teamForm.querySelector(`[data-field="players"][data-index="${i}"]`);
       const imageInput=els.teamForm.querySelector(`[data-field="image"][data-index="${i}"]`);
       const name=(nameInput?.value||"").trim() || `Équipe ${i+1}`;
+      const color=getTeamColor({color:(colorInput?.value||"").trim()}, i);
       const captain=(captainInput?.value||"").trim();
       const players=(playersInput?.value||"").split(",").map(v=>v.trim()).filter(Boolean);
       const image=await readImageAsDataUrl(imageInput?.files?.[0]);
-      teams.push({id:i,name,captain,players,image,wins:0,draws:0,losses:0,points:0,goalsFor:0,goalsAgainst:0});
+      teams.push({id:i,name,color,captain,players,image,wins:0,draws:0,losses:0,points:0,goalsFor:0,goalsAgainst:0});
     }
     return teams;
   }
@@ -1693,6 +1909,21 @@ function renderTeamForm(draft = null) {
   els.removeTeamBtn?.addEventListener("click", removeSetupTeam);
   els.startTournamentBtn.addEventListener("click", beginTournament);
   els.newTournamentBtn.addEventListener("click", newTournament);
+  els.homeDashboardBtn?.addEventListener("click", showDashboard);
+  els.topRegistrationBtn?.addEventListener("click", openRegistrationAdmin);
+  els.dashboardRegistrationBtn?.addEventListener("click", openRegistrationAdmin);
+  els.dashboardNewTournamentBtn?.addEventListener("click", () => { showSetup(); renderTeamForm(); });
+  els.dashboardTeamsBtn?.addEventListener("click", showTeamManagementPage);
+  els.dashboardCurrentTournamentBtn?.addEventListener("click", () => {
+    if (!state) { showToast("Aucun tournoi en cours."); return; }
+    showGame();
+    renderGame();
+    if (state.matchStarted && !state.timerPaused) startTimer();
+  });
+  els.dashboardLogoutBtn?.addEventListener("click", () => {
+    accessMode = "none";
+    showAccess();
+  });
   els.continueBtn.addEventListener("click", () => {
     if (accessMode !== "admin") { showToast("🔒 Action réservée à l'administrateur."); return; }
     const saved = loadState();
@@ -1705,6 +1936,8 @@ function renderTeamForm(draft = null) {
 
   els.startMatchBtn.addEventListener("click", startCurrentMatch);
   els.manageTeamsBtn?.addEventListener("click", openManageTeams);
+  els.openRegistrationAdminBtn?.addEventListener("click", openRegistrationAdmin);
+  document.getElementById("registrationAdminBackBtn")?.addEventListener("click", closeRegistrationAdmin);
   els.drawPlayersBtn?.addEventListener("click", drawRegisteredPlayers);
   els.closeManageTeamsBtn?.addEventListener("click", closeManageTeams);
   els.saveTeamPlayersBtn?.addEventListener("click", saveManagedTeams);

@@ -155,10 +155,10 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
   justify-content:center;
 }
 
-.player-editor{margin-top:6px;padding:8px;border:1px solid #d1d5db;border-radius:10px}
+.player-editor{margin-top:6px;padding:8px;border:1px solid #4b4e53;border-radius:10px}
 .player-editor-title{font-size:12px;font-weight:700;margin-bottom:6px}
 .player-editor-list{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}
-.player-chip{display:inline-flex;align-items:center;gap:3px;padding:4px 6px;border-radius:999px;border:1px solid #d1d5db;font-size:12px;background:#fff}
+.player-chip{display:inline-flex;align-items:center;gap:3px;padding:4px 6px;border-radius:999px;border:1px solid #d1d5db;font-size:12px;background:#444141}
 .player-remove-btn{border:0;background:transparent;padding:0 2px;font-size:14px;line-height:1;cursor:pointer}
 .player-add-btn,.pause-resume-btn{font-size:12px;padding:6px 9px;min-height:32px}
 .timer-controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:8px 0}
@@ -167,14 +167,14 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
 .topbar-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .manage-panel{margin-top:12px}
 .manage-card{max-width:760px;margin:0 auto}
-.manage-team-card{border:1px solid #d1d5db;border-radius:12px;padding:10px;margin-top:10px;background:#fff}
+.manage-team-card{border:1px solid #36383b;border-radius:12px;padding:10px;margin-top:10px;background:#312f2f}
 .manage-team-head{display:flex;align-items:end;justify-content:space-between;gap:8px}
 .manage-team-name{display:flex;flex-direction:column;gap:4px;flex:1;font-size:12px;font-weight:700}
-.manage-team-name-input,.manage-player-input{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:8px;padding:7px 8px;font-size:14px;background:#fff}
+.manage-team-name-input,.manage-player-input{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:8px;padding:7px 8px;font-size:14px;background:#413e3e}
 .manage-player-list{display:grid;gap:5px;margin:8px 0}
 .manage-player-row{display:flex;gap:5px;align-items:center}
 .manage-player-row .manage-player-input{flex:1}
-.danger-small{border:1px solid #dc2626;background:#fff;color:#b91c1c;border-radius:7px;min-width:32px;height:32px;font-weight:700}
+.danger-small{border:1px solid #dc2626;background:#302e2e;color:#b91c1c;border-radius:7px;min-width:32px;height:32px;font-weight:700}
 .manage-add-player{font-size:12px;padding:6px 9px}
 .manage-actions{display:flex;justify-content:flex-end;margin-top:12px}
 
@@ -192,3 +192,135 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
 .registration-status.closed{background:#fee2e2;color:#991b1b}
 .registration-admin-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin:10px 0}
 @media (max-width:600px){.registration-admin-actions{grid-template-columns:1fr}.manage-actions{display:grid;grid-template-columns:1fr;gap:8px}.manage-actions button{width:100%}}
+
+
+/* V6.7 - separate registration management page */
+.registration-entry-btn{margin-top:12px}
+.registration-admin-page{max-width:820px;margin:0 auto}
+.registration-admin-page-card{padding:14px}
+.registration-admin-actions-main{margin:14px 0}
+.registration-list-title{margin-top:18px}
+.registration-plan-box{border:1px solid var(--border);border-radius:14px;padding:12px;background:var(--card2);margin-top:14px}
+.registration-plan-box .section-title{margin-bottom:10px}
+@media (max-width:600px){
+  .registration-admin-page-card{padding:11px}
+  .registration-admin-actions-main{grid-template-columns:1fr}
+}
+
+/* V6.8 — team colors and mobile notifications */
+.match-announcement {
+  margin: 10px 0;
+  padding: 13px 14px;
+  border: 2px solid var(--accent);
+  border-radius: 14px;
+  background: var(--card2);
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,.16);
+}
+.match-announcement-line {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 7px;
+  font-size: 18px;
+  line-height: 1.35;
+}
+.match-announcement-line + .match-announcement-line { margin-top: 5px; }
+.match-announcement-line strong { font-weight: 900; }
+.team-name, .pre-match-teams strong { font-weight: 900; }
+.team-name { padding: 6px 9px; border-radius: 10px; background: var(--card2); }
+@media (max-width: 600px) {
+  .match-announcement { position: sticky; top: 8px; z-index: 8; }
+  .match-announcement-line { font-size: 17px; }
+  .manage-team-head { align-items: flex-end; }
+}
+
+/* V6.9 — dashboard + one-page-per-function navigation */
+.dashboard-card { max-width: 760px; margin: 0 auto; }
+.dashboard-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.dashboard-info { margin-top: 18px; }
+.card-mini {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card2);
+}
+.registration-next-action { margin: 14px 0; }
+.registration-admin-page { max-width: 900px; margin: 0 auto; }
+.manage-card { max-width: 900px; margin: 0 auto; }
+.pre-match { position: relative; }
+.pre-match .match-announcement {
+  display: block;
+  margin: 0 0 14px;
+  min-height: 64px;
+  padding: 16px 12px;
+  border-width: 3px;
+  transform: none;
+}
+.pre-match .match-announcement-line {
+  font-size: clamp(20px, 5vw, 28px);
+  font-weight: 900;
+}
+.pre-match .match-announcement-line span { font-size: 25px; }
+@media (max-width: 650px) {
+  .dashboard-actions { grid-template-columns: 1fr; }
+  .topbar-actions { gap: 5px; }
+  .topbar-actions button { padding: 8px 10px; font-size: 13px; }
+}
+
+/* V6.10 — clearer team/player management */
+.manage-team-card {
+  border-left: 5px solid var(--team-color);
+}
+.manage-team-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.team-color-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  display: inline-block;
+  border: 1px solid rgba(255,255,255,.45);
+  box-shadow: 0 0 0 2px rgba(255,255,255,.06);
+}
+.manage-player-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0,1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.player-number {
+  text-align: center;
+  font-weight: 800;
+  opacity: .65;
+}
+.icon-delete {
+  min-width: 44px;
+  padding: 9px 8px;
+}
+.manage-add-player-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+.manage-new-player-input {
+  min-width: 0;
+}
+.empty-player-list {
+  padding: 8px 0 10px;
+}
+@media (max-width: 600px) {
+  .manage-add-player-row { grid-template-columns: 1fr; }
+  .manage-add-player-row button { width: 100%; }
+}
