@@ -520,12 +520,15 @@ begin
 
   new.name := person.name;
   if coalesce(auth.jwt() ->> 'email', '') = 'abde-ghafor@hotmail.fr' then
-    -- Admin may set priority/status explicitly.
     new.priority := coalesce(new.priority, person.priority);
   else
-    -- Public visitors can only create a pending, non-priority request.
-    new.status := 'pending';
-    new.priority := false;
+    if coalesce(person.priority, false) then
+      new.status := 'approved';
+      new.priority := true;
+    else
+      new.status := 'pending';
+      new.priority := false;
+    end if;
   end if;
   return new;
 end;
@@ -543,8 +546,10 @@ on public.player_registrations
 for insert to anon, authenticated
 with check (
   allowed_player_id is not null
-  and status = 'pending'
-  and priority = false
+  and (
+    (status = 'pending' and priority = false)
+    or (status = 'approved' and priority = true)
+  )
   and exists (
     select 1 from public.registration_settings rs
     where rs.id = event_id and rs.is_open = true

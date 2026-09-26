@@ -73,3 +73,15 @@ V6.16: priorité = acceptation immédiate, autres demandes = confirmation admin 
 
 
 IMPORTANT V6.16 ONLINE: exécuter `supabase_v6_16_priority_migration.sql` dans Supabase > SQL Editor pour activer l'acceptation immédiate des joueurs prioritaires. Sans cette migration, l'ancien trigger continuera à mettre toutes les demandes en attente.
+
+
+V6.17 : priorité invisible au public; capitaines choisis avant tirage; déplacement des joueurs entre équipes; tableau final après la finale. Exécuter `supabase_v6_17_priority_migration.sql` dans Supabase SQL Editor pour l'acceptation immédiate des joueurs prioritaires.
+
+V6.17 UX:
+- Le public ne voit jamais le statut prioritaire dans le menu des noms.
+- Une demande non prioritaire indique clairement qu'elle attend confirmation et invite à revenir plus tard.
+- L'administrateur choisit un capitaine par équipe avant le tirage.
+- Le tirage place d'abord les capitaines puis répartit les autres joueurs aléatoirement.
+- Dans Équipes & joueurs, l'administrateur peut déplacer chaque joueur vers une autre équipe.
+- Après la finale, le Live et le dashboard administrateur affichent uniquement le champion, le résultat de la finale, le classement final et les équipes; aucun nouveau match n'est affiché.
+- Pour le comportement priorité immédiate en ligne, exécuter `supabase_v6_17_priority_migration.sql` dans Supabase SQL Editor.

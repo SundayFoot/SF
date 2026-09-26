@@ -357,6 +357,7 @@ function renderTeamForm(draft = null) {
       semifinalResults: [],
       finalResult: null,
       tournamentWinnerId: null,
+      captains: [],
       registrationOpen: false
     };
   }
@@ -510,7 +511,7 @@ function renderTeamForm(draft = null) {
     if (!select) return;
     const list = Array.isArray(players) ? players : [];
     select.innerHTML = `<option value="">-- Sélectionner mon nom --</option>` + list.map(p =>
-      `<option value="${escapeHtml(p.id)}" ${String(selectedId) === String(p.id) ? "selected" : ""}>${p.priority ? "⭐ " : ""}${escapeHtml(p.name)}${p.priority ? " — priorité" : ""}</option>`
+      `<option value="${escapeHtml(p.id)}" ${String(selectedId) === String(p.id) ? "selected" : ""}>${escapeHtml(p.name)}</option>`
     ).join("");
     select.disabled = list.length === 0;
     if (els.registerPlayerBtn) els.registerPlayerBtn.disabled = list.length === 0;
@@ -926,7 +927,7 @@ function renderTeamForm(draft = null) {
       feedback.className = `registration-feedback ${immediate ? "success" : "pending"}`;
       feedback.innerHTML = immediate
         ? `<strong>✅ Inscription confirmée !</strong><p>Ton nom est prioritaire : ta participation pour dimanche est acceptée immédiatement.</p>`
-        : `<strong>⏳ Demande envoyée — participation non encore confirmée.</strong><p>Ta demande est bien enregistrée. Elle sera traitée par l’administrateur dans l’ordre d’arrivée.</p>`;
+        : `<strong>⏳ Demande envoyée — participation non encore confirmée.</strong><p>Ta demande est bien enregistrée. Elle sera traitée par l’administrateur dans l’ordre d’arrivée. <strong>Je t’invite à revenir sur cette page dans quelques heures pour vérifier le statut de ta demande.</strong></p>`;
     }
     showToast(immediate ? "✅ Participation confirmée immédiatement." : "⏳ Demande envoyée — attente de confirmation.");
   }
@@ -1000,33 +1001,44 @@ function renderTeamForm(draft = null) {
   }
 
   async function drawRegisteredPlayers() {
-    if (accessMode !== "admin" || !state) { showToast("🔒 Action réservée à l’administrateur."); return; }
-    if (state.history?.length || state.matchStarted || state.matchNumber > 1) {
-      showToast("Le tirage est disponible avant le début du premier match.");
-      return;
-    }
-    const rows = await readRegistrations();
-    const names = registrationNames(rows);
-    if (!names.length) { showToast("Aucun joueur inscrit."); return; }
-    const plan = getRegistrationPlan();
-    const planError = validateRegistrationPlan(names.length, plan.teamCount, plan.playersPerTeam);
-    if (planError) { showToast(planError); return; }
-    if (!state.teams?.length || state.teams.length !== plan.teamCount) {
-      showToast(`Le tournoi doit avoir ${plan.teamCount} équipes. Crée/reconfigure le tournoi avant le tirage.`);
-      return;
-    }
-    if (!confirm(`Répartir aléatoirement ${names.length} joueurs dans ${plan.teamCount} équipes ?\n\nRépartition cible : ${plan.playersPerTeam} joueurs/équipe (avec équilibrage si nécessaire).`)) return;
+    if(accessMode!=="admin"||!state){showToast("🔒 Action réservée à l’administrateur.");return;}
+    if(state.history?.length||state.matchStarted||state.matchNumber>1){showToast("Le tirage est disponible avant le début du premier match.");return;}
 
-    const shuffled = shuffleArray([...names]);
-    state.teams.forEach(team => { team.players = []; });
-    shuffled.forEach((name, index) => {
-      const teamIndex = index % plan.teamCount;
-      state.teams[teamIndex].players.push(name);
-    });
-    saveState();
-    renderGame();
-    renderManageTeams();
-    showToast(`🎲 Tirage terminé : ${names.length} joueurs répartis en ${plan.teamCount} équipes.`);
+    const rows=await readRegistrations(),names=registrationNames(rows);
+    if(!names.length){showToast("Aucun joueur inscrit.");return;}
+    const plan=getRegistrationPlan(),planError=validateRegistrationPlan(names.length,plan.teamCount,plan.playersPerTeam);
+    if(planError){showToast(planError);return;}
+    if(!state.teams?.length||state.teams.length!==plan.teamCount){showToast(`Le tournoi doit avoir ${plan.teamCount} équipes.`);return;}
+
+    const captains=state.teams.map((_,i)=>String(state.captains?.[i]||"").trim());
+    if(captains.some(c=>!c)){showToast("🧢 Choisis un capitaine pour chaque équipe avant le tirage.");return;}
+    if(new Set(captains.map(x=>x.toLocaleLowerCase())).size!==captains.length){showToast("⚠️ Chaque équipe doit avoir un capitaine différent.");return;}
+
+    const approvedMap=new Map(names.map(n=>[n.toLocaleLowerCase(),n]));
+    const captainNames=captains.map(c=>approvedMap.get(c.toLocaleLowerCase())||c);
+    if(captainNames.some(c=>!approvedMap.has(c.toLocaleLowerCase()))){showToast("⚠️ Un capitaine choisi n’est plus dans les joueurs approuvés.");return;}
+    if(!confirm(`Placer les ${captains.length} capitaines en premier, puis tirer au sort les ${Math.max(0,names.length-captains.length)} autres joueurs ?`))return;
+
+    const remaining=names.filter(n=>!captainNames.some(c=>c.toLocaleLowerCase()===n.toLocaleLowerCase()));
+    const shuffled=shuffleArray([...remaining]);
+    const rosters=state.teams.map((_,i)=>[captainNames[i]]);
+    let cursor=0;
+    while(cursor<shuffled.length){
+      let placed=false;
+      for(let i=0;i<rosters.length;i++){
+        if(rosters[i].length<plan.playersPerTeam&&cursor<shuffled.length){rosters[i].push(shuffled[cursor++]);placed=true;}
+      }
+      if(!placed)break;
+    }
+    while(cursor<shuffled.length){
+      const target=rosters.map((p,i)=>({i,n:p.length})).sort((a,b)=>a.n-b.n)[0];
+      if(!target||target.n>=7)break;
+      rosters[target.i].push(shuffled[cursor++]);
+    }
+    state.teams.forEach((team,i)=>team.players=rosters[i]);
+    state.captains=captainNames;
+    saveState();renderGame();renderManageTeams();refreshCaptainSelection();
+    showToast("🎲 Tirage terminé : capitaines placés en premier, puis joueurs répartis aléatoirement.");
   }
 
   async function applyRegistrationTeamPlan() {
@@ -1240,8 +1252,13 @@ function renderTeamForm(draft = null) {
     // Once the final is finished, the live page becomes a simple result page:
     // no stale match, no queue, no old timer.
     if (state.phase === "complete" || state.tournamentWinnerId !== null) {
-      root.innerHTML = matchHtml;
-      if (liveTimerId) { clearInterval(liveTimerId); liveTimerId = null; }
+      const final=state.finalResult, fa=final?team(final.winnerId):null, fb=final?team(final.loserId):null;
+      const finalCard=final?`<div class="card live-card final-result-card"><div class="section-title">🏆 Résultat de la finale</div><div class="final-result-teams"><strong style="color:${getTeamColor(fa,final.winnerId)}">${escapeHtml(fa?.name||"—")}</strong><span class="final-result-score">${final.scoreA} - ${final.scoreB}</span><strong style="color:${getTeamColor(fb,final.loserId)}">${escapeHtml(fb?.name||"—")}</strong></div></div>`:"";
+      const ranking=sortedTeams().map((t,i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(t.name)}</strong><span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span></div>`).join("");
+      const scorers=getScorerRanking().map(([name,goals],i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(name)}</strong><span class="badges">${goals} but${goals>1?"s":""}</span></div>`).join("");
+      const teamTable=state.teams.map((t,i)=>`<div class="public-final-team"><div><span class="team-color-dot" style="background:${getTeamColor(t,i)}"></span><strong>${escapeHtml(t.name)}</strong></div><span class="badges">${Array.isArray(t.players)?t.players.length:0} joueurs</span></div>`).join("");
+      root.innerHTML=matchHtml+finalCard+`<div class="grid two"><div class="card live-card"><div class="section-title">🏆 Classement final</div>${ranking}</div><div class="card live-card"><div class="section-title">⚽ Buteurs</div>${scorers||`<p class="muted">Aucun buteur.</p>`}</div></div><div class="card live-card"><div class="section-title">👥 Équipes</div>${teamTable}</div>`;
+      if(liveTimerId){clearInterval(liveTimerId);liveTimerId=null;}
       return;
     }
 
@@ -1750,6 +1767,36 @@ function renderTeamForm(draft = null) {
   }
 
 
+  async function getApprovedRegistrationNames() {
+    try {
+      const rows = await readRegistrations();
+      return rows.filter(r => (r.status || "approved") === "approved")
+        .map(r => String(r.name || "").trim()).filter(Boolean)
+        .filter((name,i,arr)=>arr.findIndex(x=>x.toLocaleLowerCase()===name.toLocaleLowerCase())===i);
+    } catch (error) {
+      console.error("Captain list error", error);
+      return [];
+    }
+  }
+
+  function renderCaptainSelection(names = null) {
+    const root=document.getElementById("captainsSelection");
+    if(!root||!state?.teams)return;
+    const options=Array.isArray(names)?names:Array.from(new Set(state.teams.flatMap(t=>Array.isArray(t.players)?t.players.map(playerDisplayName):[]).filter(Boolean)));
+    const captains=Array.isArray(state.captains)?state.captains:[];
+    root.innerHTML=`<div class="captain-grid">${state.teams.map((team,index)=>{
+      const current=captains[index]||"";
+      const opts=[`<option value="">— Choisir le capitaine —</option>`].concat(options.map(name=>`<option value="${escapeHtml(name)}" ${name===current?"selected":""}>${escapeHtml(name)}</option>`));
+      return `<label class="captain-select-wrap"><span><span class="team-color-dot" style="background:${getTeamColor(team,index)}"></span> Capitaine — ${escapeHtml(team.name)}</span><select class="captain-select" data-captain-team="${index}">${opts.join("")}</select></label>`;
+    }).join("")}</div>`;
+  }
+
+  async function refreshCaptainSelection() {
+    const names=await getApprovedRegistrationNames();
+    const all=Array.from(new Set([...names,...state.teams.flatMap(t=>Array.isArray(t.players)?t.players.map(playerDisplayName):[])].filter(Boolean)));
+    renderCaptainSelection(all);
+  }
+
   function renderManageTeams() {
     if (!state || accessMode !== "admin" || !els.manageTeamsContent) return;
 
@@ -1780,6 +1827,9 @@ function renderTeamForm(draft = null) {
               <div class="manage-player-row">
                 <span class="player-number">${playerIndex + 1}</span>
                 <input class="manage-player-input" data-player-name="${teamIndex}:${playerIndex}" value="${escapeHtml(player)}" maxlength="60">
+                <select class="manage-player-team-select" data-player-team="${teamIndex}:${playerIndex}" title="Déplacer le joueur">
+                  ${state.teams.map((targetTeam,targetIndex)=>`<option value="${targetIndex}" ${targetIndex===teamIndex?"selected":""}>${escapeHtml(targetTeam.name)}</option>`).join("")}
+                </select>
                 <button type="button" class="danger-small icon-delete" data-delete-player="${teamIndex}:${playerIndex}" title="Supprimer ${escapeHtml(player)}" aria-label="Supprimer ${escapeHtml(player)}">🗑️</button>
               </div>
             `).join("") : `<div class="muted small empty-player-list">Aucun joueur dans cette équipe.</div>`}
@@ -1792,6 +1842,8 @@ function renderTeamForm(draft = null) {
         </div>
       `;
     }).join("");
+
+    renderCaptainSelection();
 
     els.manageTeamsContent.querySelectorAll("[data-add-manage-player]").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -1835,35 +1887,35 @@ function renderTeamForm(draft = null) {
   }
 
   function saveManagedTeams() {
-    if (accessMode !== "admin" || !state) {
-      showToast("🔒 Action réservée à l’administrateur.");
-      return;
+    if(accessMode!=="admin"||!state){showToast("🔒 Action réservée à l’administrateur.");return;}
+    els.manageTeamsContent.querySelectorAll("[data-team-name]").forEach(input=>{
+      const i=Number(input.dataset.teamName); if(state.teams[i]){const n=input.value.trim();if(n)state.teams[i].name=n;}
+    });
+    els.manageTeamsContent.querySelectorAll("[data-team-color]").forEach(select=>{
+      const i=Number(select.dataset.teamColor); if(state.teams[i])state.teams[i].color=getTeamColor({color:select.value},i);
+    });
+
+    const next=state.teams.map(()=>[]);
+    for(const input of [...els.manageTeamsContent.querySelectorAll("[data-player-name]")]){
+      const [origRaw,pidxRaw]=String(input.dataset.playerName).split(":");
+      const orig=Number(origRaw),pidx=Number(pidxRaw);
+      const target=Number(els.manageTeamsContent.querySelector(`[data-player-team="${orig}:${pidx}"]`)?.value??orig);
+      const name=input.value.trim();
+      if(name&&next[target])next[target].push(name);
     }
+    const tooMany=next.findIndex(p=>p.length>7);
+    if(tooMany>=0){showToast(`⚠️ Équipe ${state.teams[tooMany].name} dépasse 7 joueurs.`);return;}
+    state.teams.forEach((team,i)=>team.players=next[i]);
 
-    els.manageTeamsContent.querySelectorAll("[data-team-name]").forEach(input => {
-      const index = Number(input.dataset.teamName);
-      if (state.teams[index]) {
-        const name = input.value.trim();
-        if (name) state.teams[index].name = name;
-      }
-    });
-    els.manageTeamsContent.querySelectorAll("[data-team-color]").forEach(select => {
-      const index = Number(select.dataset.teamColor);
-      if (state.teams[index]) state.teams[index].color = getTeamColor({color: select.value}, index);
-    });
+    const selected=state.teams.map((_,i)=>String(els.manageTeamsContent.querySelector(`[data-captain-team="${i}"]`)?.value||"").trim());
+    const nonEmpty=selected.filter(Boolean);
+    if(new Set(nonEmpty.map(x=>x.toLocaleLowerCase())).size!==nonEmpty.length){showToast("⚠️ Un même joueur ne peut pas être capitaine de plusieurs équipes.");return;}
+    const captainOutsideTeam=selected.some((captain,i)=>captain && !state.teams[i].players.some(p=>playerDisplayName(p).toLocaleLowerCase()===captain.toLocaleLowerCase()));
+    if(captainOutsideTeam){showToast("⚠️ Chaque capitaine doit appartenir à son équipe.");return;}
+    state.captains=selected;
 
-    state.teams.forEach((team, teamIndex) => {
-      if (!Array.isArray(team.players)) team.players = [];
-      const rows = [...els.manageTeamsContent.querySelectorAll(`[data-player-name^="${teamIndex}:"]`)];
-      team.players = rows
-        .map(input => input.value.trim())
-        .filter(Boolean);
-    });
-
-    saveState();
-    renderGame();
-    renderManageTeams();
-    showToast("✓ Équipes et joueurs enregistrés.");
+    saveState();renderGame();renderManageTeams();refreshCaptainSelection();
+    showToast("✓ Équipes, déplacements et capitaines enregistrés.");
   }
 
   function openManageTeams() {
@@ -1894,12 +1946,30 @@ function renderTeamForm(draft = null) {
         `<div class="card-mini"><strong>Aucun tournoi en cours.</strong><p class="muted small">Tu peux ouvrir les inscriptions ou créer un nouveau tournoi.</p></div>`;
       return;
     }
-    const a = state.active ? state.teams[state.active.a]?.name : "";
-    const b = state.active ? state.teams[state.active.b]?.name : "";
-    els.dashboardTournamentInfo.innerHTML =
+
+    if (state.phase === "complete" || state.tournamentWinnerId !== null) {
+      const winner=state.teams[state.tournamentWinnerId];
+      const final=state.finalResult;
+      const ranking=sortedTeams().map((t,i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(t.name)}</strong><span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span></div>`).join("");
+      const finalScore=final?`${escapeHtml(state.teams[final.winnerId]?.name||"—")} ${final.scoreA} - ${final.scoreB} ${escapeHtml(state.teams[final.loserId]?.name||"—")}`:"—";
+      const teams=state.teams.map((t,i)=>`<div class="public-final-team"><div><span class="team-color-dot" style="background:${getTeamColor(t,i)}"></span><strong>${escapeHtml(t.name)}</strong></div><span class="badges">${Array.isArray(t.players)?t.players.length:0} joueurs</span></div>`).join("");
+      els.dashboardTournamentInfo.innerHTML=`
+        <div class="card-mini final-admin-dashboard">
+          <div class="tournament-finished-status final-status-inline">🏆 TOURNOI TERMINÉ</div>
+          <div class="final-admin-winner">Champion : <strong style="color:${getTeamColor(winner,state.tournamentWinnerId||0)}">${escapeHtml(winner?.name||"—")}</strong></div>
+          <div class="final-admin-score"><span>🏆 Finale</span><strong>${finalScore}</strong></div>
+        </div>
+        <div class="dashboard-final-grid">
+          <div class="card-mini"><strong>🏆 Classement final</strong>${ranking}</div>
+          <div class="card-mini"><strong>👥 Équipes</strong>${teams}</div>
+        </div>`;
+      return;
+    }
+
+    const a=state.active?state.teams[state.active.a]?.name:"",b=state.active?state.teams[state.active.b]?.name:"";
+    els.dashboardTournamentInfo.innerHTML=
       `<div class="card-mini"><strong>🏟️ Tournoi actuel</strong><p class="muted small">${
-        state.phase === "complete" ? "Tournoi terminé" :
-        state.active ? `Match #${state.matchNumber} — ${escapeHtml(a || "—")} vs ${escapeHtml(b || "—")}` :
+        state.active ? `Match #${state.matchNumber} — ${escapeHtml(a||"—")} vs ${escapeHtml(b||"—")}` :
         "Tournoi préparé"
       }</p></div>`;
   }
@@ -1915,6 +1985,7 @@ function renderTeamForm(draft = null) {
     if (accessMode !== "admin") { showAccess(); return; }
     showOnly("manageTeamsPanel", true);
     renderManageTeams();
+    refreshCaptainSelection();
     scheduleAdminIdleLogout();
   }
 
