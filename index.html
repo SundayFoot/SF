@@ -22,6 +22,7 @@
         <div class="access-grid">
           <button id="adminAccessBtn" class="primary full">🔐 Admin</button>
           <button id="liveAccessBtn" class="secondary full">👀 Live match</button>
+          <button id="publicTeamsAccessBtn" class="secondary full">👥 Voir les équipes</button>
           <button id="registerAccessBtn" class="secondary full">📝 S'inscrire pour dimanche</button>
         </div>
         <div id="adminLoginBox" class="hidden login-box">
@@ -52,6 +53,7 @@
             <strong>👋 Ton nom n’apparaît pas dans la liste ?</strong>
             <p>Pas de souci. Pour garder une organisation claire, les inscriptions sont réservées aux personnes enregistrées par l’association. Nous t’invitons à nous contacter afin d’ajouter ton nom à la liste pour les prochains matchs.</p>
           </div>
+          <div id="registrationFeedback" class="registration-feedback hidden" aria-live="polite"></div>
           <button id="registerPlayerBtn" class="primary full">✅ Je m'inscris</button>
         </div>
         <div id="registrationClosedBox" class="hidden">
@@ -62,6 +64,16 @@
           <div id="publicRegistrationList"></div>
         </div>
       </div>
+    </section>
+
+    <section id="publicTeamsScreen" class="screen hidden">
+      <div class="card">
+        <div class="topbar-inline">
+          <div><h2>👥 Équipes & joueurs</h2><p class="muted">Retrouve ton équipe et les joueurs inscrits.</p></div>
+          <button id="publicTeamsBackBtn" class="secondary">Accueil</button>
+        </div>
+      </div>
+      <div id="publicTeamsContent"></div>
     </section>
 
     <section id="liveScreen" class="screen hidden">
@@ -268,7 +280,7 @@
         </div>
         <div id="manageTeamsContent"></div>
         <div class="manage-actions">
-          <button id="drawPlayersBtn" class="secondary">🎲 Tirage au sort des joueurs</button>
+          <button id="drawPlayersBtn" class="secondary">🎲 Tirer au sort les équipes</button>
           <button id="saveTeamPlayersBtn" class="primary">💾 Enregistrer les modifications</button>
         </div>
       </div>

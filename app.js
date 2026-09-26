@@ -65,6 +65,11 @@ function editTeamPlayers(teamId) {
     registerPlayerBtn: $("registerPlayerBtn"),
     registrationCount: $("registrationCount"),
     publicRegistrationList: $("publicRegistrationList"),
+    registrationFeedback: $("registrationFeedback"),
+    publicTeamsAccessBtn: $("publicTeamsAccessBtn"),
+    publicTeamsScreen: $("publicTeamsScreen"),
+    publicTeamsContent: $("publicTeamsContent"),
+    publicTeamsBackBtn: $("publicTeamsBackBtn"),
     manageTeamsPanel: $("manageTeamsPanel"),
     manageTeamsContent: $("manageTeamsContent"),
     closeManageTeamsBtn: $("closeManageTeamsBtn"),
@@ -482,7 +487,8 @@ function renderTeamForm(draft = null) {
       .select("id,event_id,name,priority,active,created_at")
       .eq("event_id", REG_ROW_ID)
       .eq("active", true)
-      .order("name", { ascending: true });
+      .order("priority", { ascending: false })
+      .order("created_at", { ascending: true });
     if (error) { console.error("Allowed players read error", error); return []; }
     return Array.isArray(data) ? data : [];
   }
@@ -504,7 +510,7 @@ function renderTeamForm(draft = null) {
     if (!select) return;
     const list = Array.isArray(players) ? players : [];
     select.innerHTML = `<option value="">-- Sélectionner mon nom --</option>` + list.map(p =>
-      `<option value="${escapeHtml(p.id)}" ${String(selectedId) === String(p.id) ? "selected" : ""}>${escapeHtml(p.name)}</option>`
+      `<option value="${escapeHtml(p.id)}" ${String(selectedId) === String(p.id) ? "selected" : ""}>${p.priority ? "⭐ " : ""}${escapeHtml(p.name)}${p.priority ? " — priorité" : ""}</option>`
     ).join("");
     select.disabled = list.length === 0;
     if (els.registerPlayerBtn) els.registerPlayerBtn.disabled = list.length === 0;
@@ -560,7 +566,7 @@ function renderTeamForm(draft = null) {
         <div class="registration-admin-head">
           <div>
             <strong>📝 Gestion des inscriptions</strong>
-            <p class="muted small">Seuls les joueurs approuvés peuvent entrer dans les équipes. Les joueurs prioritaires sont identifiés séparément.</p>
+            <p class="muted small">Les joueurs prioritaires sont acceptés immédiatement. Les autres demandes restent en attente et sont traitées par l’administrateur dans l’ordre d’arrivée.</p>
           </div>
           <span class="registration-status ${settings.is_open ? "open" : "closed"}">${settings.is_open ? "🟢 Ouvertes" : "🔴 Fermées"}</span>
         </div>
@@ -659,7 +665,8 @@ function renderTeamForm(draft = null) {
         ${rejected.length ? `<div class="registration-section-block"><div class="section-title">🚫 Refusées <span class="badges">${rejected.length}</span></div><div>${rejected.map(r => `<div class="registration-admin-row"><strong>${escapeHtml(r.name)}</strong><button type="button" class="secondary small-btn" data-reapprove-registration="${escapeHtml(r.id)}">↩ Réexaminer</button></div>`).join("")}</div></div>` : ""}
 
         <div class="registration-next-action">
-          <button id="createTeamsFromRegistrationsBtn" class="primary full">👥 Créer / préparer les équipes avec les joueurs approuvés</button>
+          <button id="createTeamsFromRegistrationsBtn" class="primary full">🎲 Préparer les équipes et faire le tirage</button>
+          <p class="muted small">Quand la liste est prête, ce bouton crée la configuration choisie et répartit automatiquement les joueurs approuvés dans les équipes.</p>
         </div>
       </div>`;
 
@@ -791,9 +798,7 @@ function renderTeamForm(draft = null) {
     }));
 
     document.getElementById("applyRegistrationPlanBtn")?.addEventListener("click", applyRegistrationTeamPlan);
-    document.getElementById("createTeamsFromRegistrationsBtn")?.addEventListener("click", () => {
-      closeRegistrationAdmin(); showSetup(); renderTeamForm(); showToast("⚽ Page de création des équipes ouverte.");
-    });
+    document.getElementById("createTeamsFromRegistrationsBtn")?.addEventListener("click", prepareTeamsAndDrawFromRegistrations);
   }
 
   async function openRegistrationAdmin() {
@@ -828,6 +833,10 @@ function renderTeamForm(draft = null) {
     els.registrationFormBox?.classList.toggle("hidden", !open);
     els.registrationClosedBox?.classList.toggle("hidden", open);
     const allowedPlayers = open ? await readAllowedPlayers() : [];
+    if (els.registrationFeedback) {
+      els.registrationFeedback.classList.add("hidden");
+      els.registrationFeedback.innerHTML = "";
+    }
     renderPublicAllowedPlayerSelect(allowedPlayers);
     const rows = open ? await readRegistrations() : [];
     renderRegistrationList(rows);
@@ -836,6 +845,7 @@ function renderTeamForm(draft = null) {
 
   async function submitRegistration() {
     const allowedPlayerId = String(els.registrationName?.value || "").trim();
+    const feedback = els.registrationFeedback;
     if (!allowedPlayerId) {
       showToast("Choisis ton nom dans la liste.");
       return;
@@ -858,8 +868,8 @@ function renderTeamForm(draft = null) {
     }
 
     const rows = await readRegistrations();
-    const approvedOrPending = rows.filter(r => ["approved", "pending"].includes(r.status || "approved"));
-    if (approvedOrPending.length >= 28) {
+    const activeRequests = rows.filter(r => ["approved", "pending"].includes(r.status || "approved"));
+    if (activeRequests.length >= 28) {
       await writeRegistrationSettings(false);
       showToast("La liste est complète : 28 joueurs maximum.");
       await enterRegistrationMode();
@@ -871,7 +881,19 @@ function renderTeamForm(draft = null) {
       String(r.name || "").trim().toLocaleLowerCase() === String(person.name || "").trim().toLocaleLowerCase()
     );
     if (exists) {
-      showToast("Tu es déjà inscrit ou ta demande est déjà en attente.");
+      const existing = rows.find(r =>
+        String(r.allowed_player_id || "") === allowedPlayerId ||
+        String(r.name || "").trim().toLocaleLowerCase() === String(person.name || "").trim().toLocaleLowerCase()
+      );
+      const alreadyAccepted = (existing?.status || "") === "approved";
+      const message = alreadyAccepted
+        ? "✅ Ton inscription est déjà confirmée."
+        : "⏳ Ta demande est déjà enregistrée et attend la confirmation de l’administrateur.";
+      if (feedback) {
+        feedback.className = `registration-feedback ${alreadyAccepted ? "success" : "pending"}`;
+        feedback.innerHTML = `<strong>${message}</strong>`;
+      }
+      showToast(message);
       return;
     }
 
@@ -885,13 +907,28 @@ function renderTeamForm(draft = null) {
 
     if (error) {
       console.error("Registration insert error", error);
-      showToast(error.message?.includes("joueur") ? error.message : "Impossible de valider l'inscription.");
+      showToast("Impossible de valider l'inscription. Réessaie dans un instant.");
       return;
+    }
+
+    const immediate = !!person.priority;
+    if (feedback) {
+      feedback.className = `registration-feedback ${immediate ? "success" : "pending"}`;
+      feedback.innerHTML = immediate
+        ? `<strong>✅ Inscription confirmée !</strong><p>Ton nom est prioritaire : ta participation pour dimanche est acceptée immédiatement.</p>`
+        : `<strong>⏳ Demande envoyée — participation non encore confirmée.</strong><p>Ta demande est bien enregistrée. Elle sera traitée par l’administrateur dans l’ordre d’arrivée. Tu recevras la confirmation lorsque ta participation sera validée.</p>`;
     }
 
     els.registrationName.value = "";
     await enterRegistrationMode();
-    showToast("✓ Demande envoyée. L’association doit confirmer ta participation.");
+    // enterRegistrationMode refreshes the list but keeps the clear status message below.
+    if (feedback) {
+      feedback.className = `registration-feedback ${immediate ? "success" : "pending"}`;
+      feedback.innerHTML = immediate
+        ? `<strong>✅ Inscription confirmée !</strong><p>Ton nom est prioritaire : ta participation pour dimanche est acceptée immédiatement.</p>`
+        : `<strong>⏳ Demande envoyée — participation non encore confirmée.</strong><p>Ta demande est bien enregistrée. Elle sera traitée par l’administrateur dans l’ordre d’arrivée.</p>`;
+    }
+    showToast(immediate ? "✅ Participation confirmée immédiatement." : "⏳ Demande envoyée — attente de confirmation.");
   }
 
   function registrationTeamPlan(count) {
@@ -920,6 +957,46 @@ function renderTeamForm(draft = null) {
     if (total < min) return `Il faut au moins ${min} joueurs pour ${teamCount} équipes.`;
     if (total > max) return `Il y a trop de joueurs pour ${teamCount} équipes : maximum ${max}.`;
     return "";
+  }
+
+  async function prepareTeamsAndDrawFromRegistrations() {
+    if (accessMode !== "admin") { showToast("🔒 Action réservée à l’administrateur."); return; }
+    const rows = await readRegistrations();
+    const approvedRows = rows.filter(r => (r.status || "approved") === "approved");
+    const names = approvedRows.map(r => String(r.name || "").trim()).filter(Boolean);
+    const { teamCount, playersPerTeam } = getRegistrationPlan();
+    const planError = validateRegistrationPlan(names.length, teamCount, playersPerTeam);
+    if (planError) { showToast(planError); return; }
+
+    if (state?.history?.length || state?.matchStarted || state?.matchNumber > 1) {
+      showToast("Un tournoi est déjà commencé. Termine-le avant de refaire le tirage.");
+      return;
+    }
+    if (state && state.active && !confirm("Un tournoi est déjà préparé. Remplacer sa répartition par celle des joueurs inscrits ?")) return;
+
+    const teams = Array.from({ length: teamCount }, (_, i) => ({
+      id: "team_" + i,
+      name: defaultNames[i] || `Équipe ${i + 1}`,
+      color: defaultColors[i % defaultColors.length],
+      captain: "",
+      players: [],
+      image: "",
+      wins: 0, draws: 0, losses: 0, points: 0, goalsFor: 0, goalsAgainst: 0
+    }));
+
+    state = createEmptyState(teams, 5);
+    state.queue = teams.map((_, i) => i);
+
+    const shuffled = shuffleArray([...names]);
+    shuffled.forEach((name, i) => {
+      teams[i % teamCount].players.push(name);
+    });
+
+    saveState();
+    migrateTeamColors();
+    showTeamManagementPage();
+    renderManageTeams();
+    showToast(`🎲 Tirage terminé : ${names.length} joueurs répartis dans ${teamCount} équipes.`);
   }
 
   async function drawRegisteredPlayers() {
@@ -996,11 +1073,12 @@ function renderTeamForm(draft = null) {
     if (!supabaseClient || realtimeChannel) return;
     realtimeChannel = supabaseClient.channel("sunday-football-live")
       .on("postgres_changes", { event: "*", schema: "public", table: SF_TABLE, filter: "id=eq.current" }, payload => {
-        if (accessMode !== "live") return;
+        if (accessMode !== "live" && accessMode !== "publicTeams") return;
         const incoming = payload.new?.state;
         if (!incoming) return;
         state = incoming;
-        renderLive();
+        if (accessMode === "live") renderLive();
+        else renderPublicTeams();
       })
       .subscribe(status => {
         const el = document.getElementById("liveConnection");
@@ -1040,7 +1118,7 @@ function renderTeamForm(draft = null) {
 
   function showOnly(screenId, admin = false) {
     const ids = [
-      "accessScreen", "registrationScreen", "liveScreen", "dashboardPage",
+      "accessScreen", "registrationScreen", "publicTeamsScreen", "liveScreen", "dashboardPage",
       "setupScreen", "registrationAdminScreen", "gameScreen", "manageTeamsPanel", "finalScreen"
     ];
     ids.forEach(id => document.getElementById(id)?.classList.add("hidden"));
@@ -1078,6 +1156,51 @@ function renderTeamForm(draft = null) {
     if (msg) msg.textContent = "";
   }
 
+  function playerDisplayName(player) {
+    return typeof player === "string" ? player : String(player?.name || "").trim();
+  }
+
+  function renderPublicTeams() {
+    const root = els.publicTeamsContent;
+    if (!root) return;
+    if (!state || !Array.isArray(state.teams) || !state.teams.length) {
+      root.innerHTML = `<div class="card public-empty-card"><div class="public-empty-icon">👥</div><h3>Les équipes ne sont pas encore préparées</h3><p class="muted">L’administrateur préparera les équipes après la clôture des inscriptions.</p></div>`;
+      return;
+    }
+
+    const cards = state.teams.map((team, index) => {
+      const players = Array.isArray(team.players) ? team.players.map(playerDisplayName).filter(Boolean) : [];
+      const color = getTeamColor(team, index);
+      const readable = color.toLowerCase() === "#f8fafc" || color.toLowerCase() === "#eab308" ? "#111827" : "#fff";
+      return `<article class="public-team-card" style="--team-color:${escapeHtml(color)};--team-ink:${readable}">
+        <div class="public-team-header">
+          <span class="team-color-dot" style="background:${escapeHtml(color)}"></span>
+          <h3>${escapeHtml(team.name)}</h3>
+          <span class="team-player-count">${players.length} joueur${players.length > 1 ? "s" : ""}</span>
+        </div>
+        <div class="public-team-players">
+          ${players.length
+            ? players.map((name,i)=>`<div class="public-player-row"><span class="public-player-number">${i+1}</span><span>${escapeHtml(name)}</span></div>`).join("")
+            : `<div class="muted small">Aucun joueur affecté pour le moment.</div>`}
+        </div>
+      </article>`;
+    }).join("");
+
+    root.innerHTML = `<div class="public-teams-board">${cards}</div>`;
+  }
+
+  async function enterPublicTeamsMode() {
+    accessMode = "publicTeams";
+    stopTimer();
+    if (liveTimerId) { clearInterval(liveTimerId); liveTimerId = null; }
+    if (!supabaseClient) initSupabase();
+    showOnly("publicTeamsScreen", false);
+    const remote = await remoteRead();
+    state = remote;
+    renderPublicTeams();
+    subscribeRealtime();
+  }
+
   function renderLive() {
     const root = document.getElementById("liveContent");
     if (!root) return;
@@ -1086,8 +1209,22 @@ function renderTeamForm(draft = null) {
       return;
     }
     const team = id => state.teams[id];
-    let matchHtml = `<div class="card live-card"><span class="live-status">${state.phase === "league" ? "PHASE DE CLASSEMENT" : state.phase === "complete" ? "TOURNOI TERMINÉ" : "PHASE FINALE"}</span>`;
-    if (state.phaseMatch && state.phase !== "league" && state.phase !== "complete") {
+    let matchHtml = "";
+    if (state.phase === "complete" || state.tournamentWinnerId !== null) {
+      const w = team(state.tournamentWinnerId);
+      matchHtml = `<div class="card live-card tournament-finished-card">
+        <span class="live-status tournament-finished-status">TOURNOI TERMINÉ</span>
+        <div class="final-dashboard">
+          <div class="trophy">🏆</div>
+          ${teamImageHtml(w,"winner-logo")}
+          <div class="winner-name" style="color:${getTeamColor(w, state.tournamentWinnerId || 0)}">${escapeHtml(w?.name || "Champion")}</div>
+          <p class="muted">Champion du tournoi</p>
+        </div>
+      </div>`;
+    } else {
+      matchHtml = `<div class="card live-card"><span class="live-status">${state.phase === "league" ? "PHASE DE CLASSEMENT" : "PHASE FINALE"}</span>`;
+    }
+    if (state.phase !== "complete" && state.tournamentWinnerId === null && state.phaseMatch && state.phase !== "league") {
       const m=state.phaseMatch, a=team(m.a), b=team(m.b);
       const phaseName=state.phase === "playoff" ? "MATCH ÉLIMINATOIRE" : state.phase === "semifinal" ? "DEMI-FINALE" : "FINALE";
       matchHtml += `<div class="live-team-head"><div class="muted small">${phaseName}</div></div><div class="live-time" id="liveTimer">${formatTime(state.phaseSecondsLeft)}</div><div class="live-score"><div class="live-team"><strong style="color:${getTeamColor(a, m.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${m.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersA)}</div></div><div>VS</div><div class="live-team"><strong style="color:${getTeamColor(b, m.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${m.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersB)}</div></div></div><p class="muted">${state.phaseMatchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
@@ -1095,20 +1232,25 @@ function renderTeamForm(draft = null) {
       const a=team(state.active.a), b=team(state.active.b);
       matchHtml += `<div class="live-team-head"><div class="muted small">MATCH #${state.matchNumber}</div></div><div class="live-time" id="liveTimer">${formatTime(state.secondsLeft)}</div><div class="live-score"><div class="live-team"><strong style="color:${getTeamColor(a, state.active.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${state.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersA)}</div></div><div>VS</div><div class="live-team"><strong style="color:${getTeamColor(b, state.active.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${state.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersB)}</div></div></div>`;
       matchHtml += `<p class="muted">${state.matchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
-    } else if (state.tournamentWinnerId !== null) {
-      const w=team(state.tournamentWinnerId);
-      matchHtml += `<div class="final-dashboard"><div class="trophy">🏆</div><h3>${escapeHtml(w?.name || "Champion")}</h3><p>Champion du tournoi</p></div>`;
     } else {
       matchHtml += `<h3>Pas de match en cours</h3>`;
     }
-    matchHtml += `</div>`;
+    if (state.phase !== "complete" && state.tournamentWinnerId === null) matchHtml += `</div>`;
+
+    // Once the final is finished, the live page becomes a simple result page:
+    // no stale match, no queue, no old timer.
+    if (state.phase === "complete" || state.tournamentWinnerId !== null) {
+      root.innerHTML = matchHtml;
+      if (liveTimerId) { clearInterval(liveTimerId); liveTimerId = null; }
+      return;
+    }
 
     const ranking = sortedTeams().map((t,i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(t.name)}</strong><span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span></div>`).join("");
     const scorers = getScorerRanking().map(([name,goals],i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(name)}</strong><span class="badges">${goals} but${goals>1?"s":""}</span></div>`).join("");
     const queue = (state.queue||[]).map((id,i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(team(id)?.name||"—")}</strong></div>`).join("");
     root.innerHTML = matchHtml + `<div class="grid two"><div class="card live-card"><div class="section-title">🏆 Classement</div>${ranking || `<p class="muted">Aucun classement.</p>`}</div><div class="card live-card"><div class="section-title">⚽ Buteurs</div>${scorers || `<p class="muted">Aucun buteur.</p>`}</div></div><div class="card live-card"><div class="section-title">📋 Prochaines équipes</div><div class="live-list">${queue || `<p class="muted">Aucune équipe en attente.</p>`}</div></div><div class="card live-card"><div class="section-title">📜 Matchs terminés</div>${(state.history||[]).slice().reverse().map(h=>`<div class="history-item"><strong>#${h.number}</strong><span>${escapeHtml(h.text)}</span></div>`).join("") || `<p class="muted">Aucun match terminé.</p>`}</div>`;
     if (liveTimerId) clearInterval(liveTimerId);
-    if (state.active?.matchStarted) {
+    if (state.phase !== "complete" && state.tournamentWinnerId === null && state.active?.matchStarted) {
       let remaining = Number(state.secondsLeft)||0;
       liveTimerId=setInterval(()=>{ remaining=Math.max(0,remaining-1); const t=document.getElementById("liveTimer"); if(t)t.textContent=formatTime(remaining); },1000);
     }
@@ -1498,7 +1640,15 @@ function renderTeamForm(draft = null) {
     els.matchNumber.textContent = state.active ? "#" + state.matchNumber : "—";
     els.timer.textContent = formatTime(state.secondsLeft);
 
-    if (state.active) {
+    if (state.phase === "complete" || state.tournamentWinnerId !== null) {
+      els.preMatchCard.classList.add("hidden");
+      els.activeMatchCard.classList.add("hidden");
+      document.querySelectorAll("#gameScreen .stats-grid").forEach(el => el.classList.add("hidden"));
+    } else {
+      document.querySelectorAll("#gameScreen .stats-grid").forEach(el => el.classList.remove("hidden"));
+    }
+
+    if (state.active && state.phase !== "complete" && state.tournamentWinnerId === null) {
       const preA = state.teams[state.active.a];
       const preB = state.teams[state.active.b];
       els.preTeamA.textContent = preA?.name || "—";
@@ -2234,6 +2384,8 @@ function renderTeamForm(draft = null) {
   document.getElementById("adminPassword")?.addEventListener("keydown", e => { if(e.key === "Enter") enterAdminMode(); });
   document.getElementById("backAccessBtn")?.addEventListener("click", () => document.getElementById("adminLoginBox")?.classList.add("hidden"));
   document.getElementById("liveAccessBtn")?.addEventListener("click", enterLiveMode);
+  document.getElementById("publicTeamsAccessBtn")?.addEventListener("click", enterPublicTeamsMode);
+  document.getElementById("publicTeamsBackBtn")?.addEventListener("click", showAccess);
   document.getElementById("registerAccessBtn")?.addEventListener("click", enterRegistrationMode);
   document.getElementById("registerPlayerBtn")?.addEventListener("click", submitRegistration);
   document.getElementById("registrationBackBtn")?.addEventListener("click", showAccess);

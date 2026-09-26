@@ -1,4 +1,4 @@
-# Sunday Football V6.15
+# Sunday Football V6.16
 
 ## Nouveauté : inscriptions des joueurs avant dimanche
 
@@ -47,23 +47,29 @@ Le projet reste compatible avec GitHub Pages. Les fichiers principaux sont :
 
 `supabase.sql` sert à configurer la base Supabase.
 
-## V6.15
+## V6.16
 - Inscriptions du dimanche moved to a dedicated admin page.
 - Admin can open/close registrations from that page.
 - Admin can view and manage the registration list before creating a tournament.
 - Registration management is no longer embedded in the current-team panel.
 - Added server-side admin RPCs for registration controls.
 
-V6.15: code admin clavier texte sur mobile, couleurs des équipes, vibrations buts/fins de match et annonces colorées d'entrée.
+V6.16: code admin clavier texte sur mobile, couleurs des équipes, vibrations buts/fins de match et annonces colorées d'entrée.
 
-V6.15: dashboard d'accueil, pages séparées, bouton préparation des équipes, fallback Supabase pour les RPC manquantes, annonce d'entrée avant le score.
+V6.16: dashboard d'accueil, pages séparées, bouton préparation des équipes, fallback Supabase pour les RPC manquantes, annonce d'entrée avant le score.
 
-V6.15: suppression de la dépendance aux RPC d'inscriptions, gestion joueurs avec liste visible, suppression par icône et ajout par champ dédié.
+V6.16: suppression de la dépendance aux RPC d'inscriptions, gestion joueurs avec liste visible, suppression par icône et ajout par champ dédié.
 
-V6.15: session admin persistante après refresh, vraie déconnexion Supabase, inscriptions soumises en attente, validation admin, priorité, ajout direct des joueurs connus et limite de 28 joueurs approuvés.
+V6.16: session admin persistante après refresh, vraie déconnexion Supabase, inscriptions soumises en attente, validation admin, priorité, ajout direct des joueurs connus et limite de 28 joueurs approuvés.
 
-V6.15: inscriptions uniquement depuis une liste blanche créée par l'administrateur, avec priorité gérée côté admin.
+V6.16: inscriptions uniquement depuis une liste blanche créée par l'administrateur, avec priorité gérée côté admin.
 
-V6.15: une seule page visible à la fois, dashboard admin uniquement après connexion, retour dashboard après refresh pour admin, déconnexion après 30 minutes d’inactivité.
+V6.16: une seule page visible à la fois, dashboard admin uniquement après connexion, retour dashboard après refresh pour admin, déconnexion après 30 minutes d’inactivité.
 
-V6.15: correction des boutons Admin, sélection publique depuis la liste autorisée, inscription avec allowed_player_id et message d'aide si le nom n'est pas disponible.
+V6.16: correction des boutons Admin, sélection publique depuis la liste autorisée, inscription avec allowed_player_id et message d'aide si le nom n'est pas disponible.
+
+
+V6.16: priorité = acceptation immédiate, autres demandes = confirmation admin dans l'ordre d'arrivée; tirage direct depuis les inscriptions; page publique Équipes & joueurs; live terminé masqué après la finale.
+
+
+IMPORTANT V6.16 ONLINE: exécuter `supabase_v6_16_priority_migration.sql` dans Supabase > SQL Editor pour activer l'acceptation immédiate des joueurs prioritaires. Sans cette migration, l'ancien trigger continuera à mettre toutes les demandes en attente.

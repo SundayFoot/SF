@@ -387,3 +387,88 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
   opacity: .65;
   cursor: not-allowed;
 }
+
+/* V6.16 — public teams board, registration status and completed tournament */
+.tournament-finished-status {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #d1d5db;
+}
+.tournament-finished-card {
+  border-color: #3b82f6;
+}
+.registration-feedback {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  line-height: 1.45;
+}
+.registration-feedback strong { display:block; margin-bottom:4px; }
+.registration-feedback p { margin:0; }
+.registration-feedback.success {
+  background: rgba(52,211,153,.12);
+  border-color: rgba(52,211,153,.45);
+}
+.registration-feedback.pending {
+  background: rgba(251,191,36,.12);
+  border-color: rgba(251,191,36,.45);
+}
+.public-empty-card { text-align:center; margin-top:12px; }
+.public-empty-icon { font-size:42px; }
+.public-teams-board {
+  display:flex;
+  gap:14px;
+  overflow-x:auto;
+  padding:4px 2px 16px;
+  scroll-snap-type:x proximity;
+}
+.public-team-card {
+  flex:0 0 230px;
+  background:var(--card);
+  border:1px solid var(--border);
+  border-top:5px solid var(--team-color);
+  border-radius:16px;
+  overflow:hidden;
+  scroll-snap-align:start;
+  box-shadow:0 8px 24px rgba(0,0,0,.14);
+}
+.public-team-header {
+  padding:14px;
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:9px;
+  background:linear-gradient(135deg, var(--team-color), var(--card2));
+}
+.public-team-header h3 { margin:0; color:var(--team-ink); text-shadow:0 1px 1px rgba(0,0,0,.12); }
+.team-color-dot {
+  width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,.8);
+}
+.team-player-count {
+  font-size:.72rem;
+  font-weight:800;
+  padding:4px 7px;
+  border-radius:999px;
+  background:rgba(255,255,255,.82);
+  color:#111827;
+}
+.public-team-players { padding:8px; }
+.public-player-row {
+  display:flex;
+  align-items:center;
+  gap:9px;
+  min-height:42px;
+  padding:0 7px;
+  border-bottom:1px solid var(--border);
+}
+.public-player-row:last-child { border-bottom:0; }
+.public-player-number {
+  width:24px; height:24px; border-radius:50%;
+  display:grid; place-items:center;
+  background:var(--card2); color:var(--muted);
+  font-size:.75rem; font-weight:800;
+}
+@media (max-width:600px) {
+  .public-team-card { flex-basis:82vw; max-width:300px; }
+}
