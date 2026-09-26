@@ -365,6 +365,9 @@ function renderTeamForm(draft = null) {
   let realtimeChannel = null;
   let accessMode = null;
   let liveTimerId = null;
+  const ADMIN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
+  let adminIdleTimer = null;
+  let adminActivityBound = false;
 
   function onlineConfigured() {
     return !!(window.SF_SUPABASE &&
@@ -789,10 +792,9 @@ function renderTeamForm(draft = null) {
 
   async function openRegistrationAdmin() {
     if (accessMode !== "admin") { showToast("🔒 Gestion réservée à l’administrateur."); return; }
-    hideAllMainPages();
-    els.appTopbar?.classList.remove("hidden");
-    els.registrationAdminScreen?.classList.remove("hidden");
+    showOnly("registrationAdminScreen", true);
     await renderRegistrationAdmin();
+    scheduleAdminIdleLogout();
     subscribeRegistrationRealtime();
   }
 
@@ -961,6 +963,46 @@ function renderTeamForm(draft = null) {
       });
   }
 
+  function clearAdminIdleTimer() {
+    if (adminIdleTimer) { clearTimeout(adminIdleTimer); adminIdleTimer = null; }
+  }
+
+  function scheduleAdminIdleLogout() {
+    clearAdminIdleTimer();
+    if (accessMode !== "admin") return;
+    adminIdleTimer = setTimeout(async () => {
+      adminIdleTimer = null;
+      if (accessMode !== "admin") return;
+      showToast("🔐 Session administrateur expirée après 30 min d’inactivité.");
+      if (supabaseClient) {
+        try { await supabaseClient.auth.signOut(); } catch (error) { console.error(error); }
+      }
+      accessMode = "none";
+      showAccess();
+    }, ADMIN_IDLE_TIMEOUT_MS);
+  }
+
+  function bindAdminActivity() {
+    if (adminActivityBound) return;
+    adminActivityBound = true;
+    const activity = () => {
+      if (accessMode === "admin") scheduleAdminIdleLogout();
+    };
+    ["pointerdown", "keydown", "touchstart", "click"].forEach(eventName => {
+      document.addEventListener(eventName, activity, { passive: true });
+    });
+  }
+
+  function showOnly(screenId, admin = false) {
+    const ids = [
+      "accessScreen", "registrationScreen", "liveScreen", "dashboardPage",
+      "setupScreen", "registrationAdminScreen", "gameScreen", "manageTeamsPanel", "finalScreen"
+    ];
+    ids.forEach(id => document.getElementById(id)?.classList.add("hidden"));
+    els.appTopbar?.classList.toggle("hidden", !admin);
+    document.getElementById(screenId)?.classList.remove("hidden");
+  }
+
   async function restoreAdminSession() {
     if (!supabaseClient) initSupabase();
     if (!supabaseClient) { showAccess(); return; }
@@ -971,6 +1013,8 @@ function renderTeamForm(draft = null) {
         const remote = await remoteRead();
         if (remote) { state = remote; migrateTeamColors(); }
         else { const local = loadState(); if (local) { state = local; migrateTeamColors(); } }
+        bindAdminActivity();
+        scheduleAdminIdleLogout();
         showDashboard();
         return;
       }
@@ -980,23 +1024,13 @@ function renderTeamForm(draft = null) {
 
   function showAccess() {
     stopTimer();
+    clearAdminIdleTimer();
     if (liveTimerId) { clearInterval(liveTimerId); liveTimerId = null; }
-
-    // Public/visitor screen: absolutely every admin page is hidden.
-    // This is also called after logout and on expired sessions.
-    els.setupScreen?.classList.add("hidden");
-    els.gameScreen?.classList.add("hidden");
-    els.registrationAdminScreen?.classList.add("hidden");
-    els.dashboardPage?.classList.add("hidden");
-    els.manageTeamsPanel?.classList.add("hidden");
-    els.appTopbar?.classList.add("hidden");
-    document.getElementById("liveScreen")?.classList.add("hidden");
-    document.getElementById("registrationScreen")?.classList.add("hidden");
+    accessMode = "none";
+    showOnly("accessScreen", false);
     document.getElementById("adminLoginBox")?.classList.add("hidden");
-
-    // Reset the mode before exposing the public access screen.
-    if (accessMode !== "admin") accessMode = "none";
-    document.getElementById("accessScreen")?.classList.remove("hidden");
+    const msg = document.getElementById("loginMessage");
+    if (msg) msg.textContent = "";
   }
 
   function renderLive() {
@@ -1038,11 +1072,8 @@ function renderTeamForm(draft = null) {
   async function enterLiveMode() {
     accessMode="live";
     stopTimer();
-    document.getElementById("accessScreen")?.classList.add("hidden");
     document.getElementById("adminLoginBox")?.classList.add("hidden");
-    els.setupScreen.classList.add("hidden");
-    els.gameScreen.classList.add("hidden");
-    document.getElementById("liveScreen")?.classList.remove("hidden");
+    showOnly("liveScreen", false);
     if (!supabaseClient) initSupabase();
     const remote=await remoteRead();
     state=remote;
@@ -1061,8 +1092,8 @@ function renderTeamForm(draft = null) {
     const { error }=await supabaseClient.auth.signInWithPassword({ email:window.SF_SUPABASE.adminEmail, password });
     if (error) { msg.textContent="Code incorrect ou compte administrateur non configuré."; return; }
     accessMode="admin";
-    document.getElementById("accessScreen")?.classList.add("hidden");
-    els.openRegistrationAdminBtn?.classList.remove("hidden");
+    bindAdminActivity();
+    scheduleAdminIdleLogout();
     const remote=await remoteRead();
     if (remote) {
       state=remote;
@@ -1680,35 +1711,33 @@ function renderTeamForm(draft = null) {
 
   function showDashboard() {
     if (accessMode !== "admin") { showAccess(); return; }
-    hideAllMainPages();
-    els.appTopbar?.classList.remove("hidden");
-    els.dashboardPage?.classList.remove("hidden");
+    showOnly("dashboardPage", true);
     renderAdminDashboard();
+    scheduleAdminIdleLogout();
   }
 
   function showTeamManagementPage() {
-    if (accessMode !== "admin") { showToast("🔒 Gestion réservée à l’administrateur."); return; }
-    hideAllMainPages();
-    els.appTopbar?.classList.remove("hidden");
-    els.manageTeamsPanel?.classList.remove("hidden");
+    if (accessMode !== "admin") { showAccess(); return; }
+    showOnly("manageTeamsPanel", true);
     renderManageTeams();
+    scheduleAdminIdleLogout();
   }
 
   function showGame() {
-    hideAllMainPages();
-    els.appTopbar?.classList.remove("hidden");
-    els.gameScreen.classList.remove("hidden");
+    if (accessMode !== "admin") { showAccess(); return; }
+    showOnly("gameScreen", true);
     els.resumeBanner.classList.add("hidden");
-    if (els.manageTeamsBtn) els.manageTeamsBtn.classList.toggle("hidden", accessMode !== "admin");
-    if (els.newTournamentBtn) els.newTournamentBtn.classList.toggle("hidden", accessMode !== "admin");
+    if (els.manageTeamsBtn) els.manageTeamsBtn.classList.remove("hidden");
+    if (els.newTournamentBtn) els.newTournamentBtn.classList.remove("hidden");
+    scheduleAdminIdleLogout();
   }
 
   function showSetup() {
+    if (accessMode !== "admin") { showAccess(); return; }
     stopTimer();
-    hideAllMainPages();
-    els.appTopbar?.classList.remove("hidden");
-    els.setupScreen.classList.remove("hidden");
-    els.openRegistrationAdminBtn?.classList.toggle("hidden", accessMode !== "admin");
+    showOnly("setupScreen", true);
+    els.openRegistrationAdminBtn?.classList.remove("hidden");
+    scheduleAdminIdleLogout();
   }
 
 
@@ -2152,7 +2181,7 @@ function renderTeamForm(draft = null) {
   initSupabase();
   if (supabaseClient) {
     supabaseClient.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_OUT") { accessMode = "none"; showAccess(); }
+      if (event === "SIGNED_OUT") { clearAdminIdleTimer(); accessMode = "none"; showAccess(); }
     });
   }
   document.getElementById("adminAccessBtn")?.addEventListener("click", () => document.getElementById("adminLoginBox")?.classList.remove("hidden"));

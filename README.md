@@ -63,3 +63,5 @@ V6.12: suppression de la dépendance aux RPC d'inscriptions, gestion joueurs ave
 V6.12: session admin persistante après refresh, vraie déconnexion Supabase, inscriptions soumises en attente, validation admin, priorité, ajout direct des joueurs connus et limite de 28 joueurs approuvés.
 
 V6.12: inscriptions uniquement depuis une liste blanche créée par l'administrateur, avec priorité gérée côté admin.
+
+V6.14: une seule page visible à la fois, dashboard admin uniquement après connexion, retour dashboard après refresh pour admin, déconnexion après 30 minutes d’inactivité.

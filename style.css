@@ -357,3 +357,12 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
 .allowed-row { border-left: 4px solid var(--accent); }
 .inactive-row { opacity: .55; }
 #registrationName { font-size: 16px; }
+
+/* V6.14 — one screen at a time + admin session timeout */
+.screen.hidden { display: none !important; }
+#appTopbar.hidden { display: none !important; }
+@media (max-width: 720px) {
+  .topbar { flex-wrap: wrap; }
+  .topbar-actions { width: 100%; justify-content: flex-start; overflow-x: auto; padding-bottom: 2px; }
+  .topbar-actions button { flex: 0 0 auto; }
+}
