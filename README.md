@@ -1,4 +1,4 @@
-# Sunday Football V6.12
+# Sunday Football V6.15
 
 ## Nouveauté : inscriptions des joueurs avant dimanche
 
@@ -47,21 +47,23 @@ Le projet reste compatible avec GitHub Pages. Les fichiers principaux sont :
 
 `supabase.sql` sert à configurer la base Supabase.
 
-## V6.12
+## V6.15
 - Inscriptions du dimanche moved to a dedicated admin page.
 - Admin can open/close registrations from that page.
 - Admin can view and manage the registration list before creating a tournament.
 - Registration management is no longer embedded in the current-team panel.
 - Added server-side admin RPCs for registration controls.
 
-V6.12: code admin clavier texte sur mobile, couleurs des équipes, vibrations buts/fins de match et annonces colorées d'entrée.
+V6.15: code admin clavier texte sur mobile, couleurs des équipes, vibrations buts/fins de match et annonces colorées d'entrée.
 
-V6.12: dashboard d'accueil, pages séparées, bouton préparation des équipes, fallback Supabase pour les RPC manquantes, annonce d'entrée avant le score.
+V6.15: dashboard d'accueil, pages séparées, bouton préparation des équipes, fallback Supabase pour les RPC manquantes, annonce d'entrée avant le score.
 
-V6.12: suppression de la dépendance aux RPC d'inscriptions, gestion joueurs avec liste visible, suppression par icône et ajout par champ dédié.
+V6.15: suppression de la dépendance aux RPC d'inscriptions, gestion joueurs avec liste visible, suppression par icône et ajout par champ dédié.
 
-V6.12: session admin persistante après refresh, vraie déconnexion Supabase, inscriptions soumises en attente, validation admin, priorité, ajout direct des joueurs connus et limite de 28 joueurs approuvés.
+V6.15: session admin persistante après refresh, vraie déconnexion Supabase, inscriptions soumises en attente, validation admin, priorité, ajout direct des joueurs connus et limite de 28 joueurs approuvés.
 
-V6.12: inscriptions uniquement depuis une liste blanche créée par l'administrateur, avec priorité gérée côté admin.
+V6.15: inscriptions uniquement depuis une liste blanche créée par l'administrateur, avec priorité gérée côté admin.
 
-V6.14: une seule page visible à la fois, dashboard admin uniquement après connexion, retour dashboard après refresh pour admin, déconnexion après 30 minutes d’inactivité.
+V6.15: une seule page visible à la fois, dashboard admin uniquement après connexion, retour dashboard après refresh pour admin, déconnexion après 30 minutes d’inactivité.
+
+V6.15: correction des boutons Admin, sélection publique depuis la liste autorisée, inscription avec allowed_player_id et message d'aide si le nom n'est pas disponible.

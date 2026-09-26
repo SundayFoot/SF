@@ -108,6 +108,8 @@ function editTeamPlayers(teamId) {
     dashboardCurrentTournamentBtn: $("dashboardCurrentTournamentBtn"),
     dashboardTournamentInfo: $("dashboardTournamentInfo"),
     homeDashboardBtn: $("homeDashboardBtn"),
+    topRegistrationBtn: $("topRegistrationBtn"),
+    dashboardLogoutBtn: $("dashboardLogoutBtn"),
     toast: $("toast")
   };
 
@@ -500,9 +502,13 @@ function renderTeamForm(draft = null) {
   function renderPublicAllowedPlayerSelect(players, selectedId = "") {
     const select = els.registrationName;
     if (!select) return;
-    select.innerHTML = `<option value="">-- Sélectionner mon nom --</option>` + (players || []).map(p =>
+    const list = Array.isArray(players) ? players : [];
+    select.innerHTML = `<option value="">-- Sélectionner mon nom --</option>` + list.map(p =>
       `<option value="${escapeHtml(p.id)}" ${String(selectedId) === String(p.id) ? "selected" : ""}>${escapeHtml(p.name)}</option>`
     ).join("");
+    select.disabled = list.length === 0;
+    if (els.registerPlayerBtn) els.registerPlayerBtn.disabled = list.length === 0;
+    document.getElementById("registrationNoNameMessage")?.classList.toggle("hidden", list.length > 0);
   }
 
   async function readRegistrations() {
@@ -821,36 +827,71 @@ function renderTeamForm(draft = null) {
       : "🔴 Les inscriptions sont fermées pour le moment.";
     els.registrationFormBox?.classList.toggle("hidden", !open);
     els.registrationClosedBox?.classList.toggle("hidden", open);
+    const allowedPlayers = open ? await readAllowedPlayers() : [];
+    renderPublicAllowedPlayerSelect(allowedPlayers);
     const rows = open ? await readRegistrations() : [];
     renderRegistrationList(rows);
     subscribeRegistrationRealtime();
   }
 
   async function submitRegistration() {
-    const name = String(els.registrationName?.value || "").trim().replace(/\s+/g, " ");
-    if (!name) { showToast("Entre ton nom ou prénom."); return; }
-    if (name.length < 2) { showToast("Le nom est trop court."); return; }
+    const allowedPlayerId = String(els.registrationName?.value || "").trim();
+    if (!allowedPlayerId) {
+      showToast("Choisis ton nom dans la liste.");
+      return;
+    }
     if (!supabaseClient) initSupabase();
+
     const settings = await readRegistrationSettings();
     if (!settings.is_open) {
       showToast("Les inscriptions sont fermées.");
       await enterRegistrationMode();
       return;
     }
+
+    const allowedPlayers = await readAllowedPlayers();
+    const person = allowedPlayers.find(p => String(p.id) === allowedPlayerId);
+    if (!person) {
+      showToast("Ce nom n’est plus disponible. Actualise la liste.");
+      await enterRegistrationMode();
+      return;
+    }
+
     const rows = await readRegistrations();
-    if (rows.length >= 28) {
+    const approvedOrPending = rows.filter(r => ["approved", "pending"].includes(r.status || "approved"));
+    if (approvedOrPending.length >= 28) {
       await writeRegistrationSettings(false);
       showToast("La liste est complète : 28 joueurs maximum.");
       await enterRegistrationMode();
       return;
     }
-    const exists = rows.some(r => String(r.name || "").trim().toLocaleLowerCase() === name.toLocaleLowerCase());
-    if (exists) { showToast("Ce nom est déjà inscrit."); return; }
-    const { error } = await supabaseClient.from(REG_TABLE).insert({ event_id: REG_ROW_ID, name, status: "pending", priority: false });
-    if (error) { console.error(error); showToast("Impossible de valider l'inscription."); return; }
+
+    const exists = rows.some(r =>
+      String(r.allowed_player_id || "") === allowedPlayerId ||
+      String(r.name || "").trim().toLocaleLowerCase() === String(person.name || "").trim().toLocaleLowerCase()
+    );
+    if (exists) {
+      showToast("Tu es déjà inscrit ou ta demande est déjà en attente.");
+      return;
+    }
+
+    const { error } = await supabaseClient.from(REG_TABLE).insert({
+      event_id: REG_ROW_ID,
+      allowed_player_id: allowedPlayerId,
+      name: person.name,
+      status: "pending",
+      priority: false
+    });
+
+    if (error) {
+      console.error("Registration insert error", error);
+      showToast(error.message?.includes("joueur") ? error.message : "Impossible de valider l'inscription.");
+      return;
+    }
+
     els.registrationName.value = "";
     await enterRegistrationMode();
-    showToast("✓ Demande envoyée. L’administrateur doit confirmer ta participation.");
+    showToast("✓ Demande envoyée. L’association doit confirmer ta participation.");
   }
 
   function registrationTeamPlan(count) {
@@ -941,6 +982,10 @@ function renderTeamForm(draft = null) {
         if (accessMode === "admin" && !els.registrationAdminScreen?.classList.contains("hidden")) await renderRegistrationAdmin();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: REG_SETTINGS_TABLE, filter: "id=eq.current" }, async () => {
+        if (accessMode === "registration") await enterRegistrationMode();
+        if (accessMode === "admin" && !els.registrationAdminScreen?.classList.contains("hidden")) await renderRegistrationAdmin();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: REG_ALLOWED_TABLE, filter: "event_id=eq.current" }, async () => {
         if (accessMode === "registration") await enterRegistrationMode();
         if (accessMode === "admin" && !els.registrationAdminScreen?.classList.contains("hidden")) await renderRegistrationAdmin();
       })
