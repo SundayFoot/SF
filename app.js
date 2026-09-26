@@ -358,6 +358,7 @@ function renderTeamForm(draft = null) {
   const SF_ROW_ID = "current";
   const REG_SETTINGS_TABLE = "registration_settings";
   const REG_TABLE = "player_registrations";
+  const REG_ALLOWED_TABLE = "registration_allowed_players";
   const REG_ROW_ID = "current";
   let supabaseClient = null;
   let onlineSyncTimer = null;
@@ -469,11 +470,43 @@ function renderTeamForm(draft = null) {
     return false;
   }
 
+  async function readAllowedPlayers() {
+    if (!supabaseClient) return [];
+    const { data, error } = await supabaseClient
+      .from(REG_ALLOWED_TABLE)
+      .select("id,event_id,name,priority,active,created_at")
+      .eq("event_id", REG_ROW_ID)
+      .eq("active", true)
+      .order("name", { ascending: true });
+    if (error) { console.error("Allowed players read error", error); return []; }
+    return Array.isArray(data) ? data : [];
+  }
+
+  async function readAllAllowedPlayersAdmin() {
+    if (!supabaseClient || accessMode !== "admin") return [];
+    const { data, error } = await supabaseClient
+      .from(REG_ALLOWED_TABLE)
+      .select("id,event_id,name,priority,active,created_at")
+      .eq("event_id", REG_ROW_ID)
+      .order("active", { ascending: false })
+      .order("name", { ascending: true });
+    if (error) { console.error("Allowed players admin read error", error); showToast(`Erreur Supabase: ${error.message}`); return []; }
+    return Array.isArray(data) ? data : [];
+  }
+
+  function renderPublicAllowedPlayerSelect(players, selectedId = "") {
+    const select = els.registrationName;
+    if (!select) return;
+    select.innerHTML = `<option value="">-- Sélectionner mon nom --</option>` + (players || []).map(p =>
+      `<option value="${escapeHtml(p.id)}" ${String(selectedId) === String(p.id) ? "selected" : ""}>${escapeHtml(p.name)}</option>`
+    ).join("");
+  }
+
   async function readRegistrations() {
     if (!supabaseClient) return [];
     const { data, error } = await supabaseClient
       .from(REG_TABLE)
-      .select("id,name,created_at")
+      .select("id,name,status,priority,created_at")
       .eq("event_id", REG_ROW_ID)
       .order("created_at", { ascending: true });
     if (error) { console.error("Registrations read error", error); return []; }
@@ -481,7 +514,7 @@ function renderTeamForm(draft = null) {
   }
 
   function registrationNames(rows) {
-    return (rows || []).map(r => String(r?.name || "").trim()).filter(Boolean);
+    return (rows || []).filter(r => (r?.status || "approved") === "approved").map(r => String(r?.name || "").trim()).filter(Boolean);
   }
 
   function renderRegistrationList(rows, target = els.publicRegistrationList) {
@@ -504,22 +537,64 @@ function renderTeamForm(draft = null) {
     if (accessMode !== "admin" || !els.registrationAdminContent) return;
     const settings = await readRegistrationSettings();
     const rows = await readRegistrations();
-    const autoPlan = registrationTeamPlan(rows.length);
-    const defaultTeams = autoPlan.valid ? autoPlan.teamCount : (rows.length >= 10 ? Math.min(4, Math.floor(rows.length / 5)) : 2);
-    const defaultPlayers = autoPlan.valid ? Math.min(7, Math.max(5, Math.floor(rows.length / Math.max(1, autoPlan.teamCount)))) : 5;
+    const allowedPlayers = await readAllAllowedPlayersAdmin();
+    const pending = rows.filter(r => (r.status || "pending") === "pending");
+    const approved = rows.filter(r => (r.status || "approved") === "approved");
+    const rejected = rows.filter(r => (r.status || "pending") === "rejected");
+    const priority = approved.filter(r => !!r.priority);
+    const autoPlan = registrationTeamPlan(approved.length);
+    const defaultTeams = autoPlan.valid ? autoPlan.teamCount : (approved.length >= 10 ? Math.min(4, Math.floor(approved.length / 5)) : 2);
+    const defaultPlayers = autoPlan.valid ? Math.min(7, Math.max(5, Math.floor(approved.length / Math.max(1, autoPlan.teamCount)))) : 5;
+
     els.registrationAdminContent.innerHTML = `
       <div class="registration-admin-card registration-admin-page-card">
         <div class="registration-admin-head">
           <div>
             <strong>📝 Gestion des inscriptions</strong>
-            <p class="muted small">Maximum 4 équipes · 5 à 7 joueurs par équipe · maximum 28 inscrits.</p>
+            <p class="muted small">Seuls les joueurs approuvés peuvent entrer dans les équipes. Les joueurs prioritaires sont identifiés séparément.</p>
           </div>
           <span class="registration-status ${settings.is_open ? "open" : "closed"}">${settings.is_open ? "🟢 Ouvertes" : "🔴 Fermées"}</span>
         </div>
 
         <div class="registration-admin-actions registration-admin-actions-main">
-          <button id="toggleRegistrationBtn" class="${settings.is_open ? "secondary" : "primary"}">${settings.is_open ? "🔒 Fermer les inscriptions" : "📝 Ouvrir les inscriptions"}</button>
+          <button id="toggleRegistrationBtn" class="${settings.is_open ? "secondary" : "primary"}">${settings.is_open ? "🔒 Fermer les demandes" : "📝 Ouvrir les demandes"}</button>
           <button id="clearRegistrationsBtn" class="secondary">🧹 Vider la liste</button>
+        </div>
+
+        <div class="registration-admin-add allowed-list-admin">
+          <div class="section-title">📋 Liste des joueurs autorisés</div>
+          <p class="muted small">Seuls les noms de cette liste peuvent envoyer une demande. L'administrateur contrôle entièrement cette liste.</p>
+          <div class="registration-add-row">
+            <input id="adminAddAllowedName" maxlength="60" placeholder="Nom / prénom autorisé">
+            <label class="priority-check"><input id="adminAddAllowedPriority" type="checkbox"> ⭐ Prioritaire</label>
+            <button id="adminAddAllowedBtn" class="primary">＋ Ajouter à la liste</button>
+          </div>
+          <div class="allowed-player-admin-list">
+            ${allowedPlayers.length ? allowedPlayers.map(p => `
+              <div class="registration-admin-row allowed-row ${p.active ? "" : "inactive-row"}">
+                <div><strong>${escapeHtml(p.name)}</strong>${p.priority ? '<span class="priority-badge">⭐ PRIORITAIRE</span>' : ''}${!p.active ? '<span class="muted tiny"> · désactivé</span>' : ''}</div>
+                <div class="registration-row-actions">
+                  <button type="button" class="secondary small-btn" data-toggle-allowed-priority="${escapeHtml(p.id)}">${p.priority ? '☆ Retirer priorité' : '⭐ Prioritaire'}</button>
+                  ${p.active ? `<button type="button" class="danger-small" data-delete-allowed="${escapeHtml(p.id)}">🗑️</button>` : `<button type="button" class="secondary small-btn" data-reactivate-allowed="${escapeHtml(p.id)}">↩ Activer</button>`}
+                </div>
+              </div>`).join('') : `<div class="muted small">La liste autorisée est vide. Ajoute les personnes que vous connaissez avant d'ouvrir les inscriptions.</div>`}
+          </div>
+        </div>
+
+        <div class="registration-stats-grid">
+          <div class="registration-stat"><strong>${approved.length}/28</strong><span>joueurs approuvés</span></div>
+          <div class="registration-stat pending"><strong>${pending.length}</strong><span>demandes en attente</span></div>
+          <div class="registration-stat priority"><strong>${priority.length}</strong><span>prioritaires</span></div>
+        </div>
+
+        <div class="registration-admin-add">
+          <div class="section-title">⭐ Ajouter directement un joueur connu</div>
+          <div class="registration-add-row">
+            <input id="adminAddRegistrationName" maxlength="60" placeholder="Nom / prénom">
+            <label class="priority-check"><input id="adminAddRegistrationPriority" type="checkbox"> ⭐ Prioritaire</label>
+            <button id="adminAddRegistrationBtn" class="primary">＋ Ajouter</button>
+          </div>
+          <p class="muted small">Un joueur ajouté ici est immédiatement approuvé. C'est pratique pour les personnes que vous connaissez déjà.</p>
         </div>
 
         <div class="registration-plan-box">
@@ -544,80 +619,171 @@ function renderTeamForm(draft = null) {
           <button id="applyRegistrationPlanBtn" class="secondary full">👥 Utiliser cette configuration</button>
         </div>
 
-        <div class="section-title registration-list-title">👥 Joueurs inscrits <span class="badges">${rows.length}/28</span></div>
-        <div id="adminRegistrationList"></div>
-        <p class="muted small">La liste se ferme automatiquement à 28 inscrits.</p>
-      </div>`;
+        <div class="registration-section-block">
+          <div class="section-title">⏳ Demandes à traiter <span class="badges">${pending.length}</span></div>
+          <div id="pendingRegistrationList">
+            ${pending.length ? pending.map((r, i) => `
+              <div class="registration-admin-row pending-row">
+                <div><strong>${escapeHtml(r.name)}</strong><div class="muted tiny">Demande ${i + 1} · ${new Date(r.created_at).toLocaleString('fr-FR')}</div></div>
+                <div class="registration-row-actions">
+                  <button type="button" class="primary small-btn" data-approve-registration="${escapeHtml(r.id)}">✅ Accepter</button>
+                  <button type="button" class="danger-small" data-reject-registration="${escapeHtml(r.id)}">✕ Refuser</button>
+                </div>
+              </div>`).join("") : `<div class="muted small">Aucune demande en attente.</div>`}
+          </div>
+        </div>
 
-    const listTarget = document.getElementById("adminRegistrationList");
-    renderRegistrationList(rows, listTarget);
+        <div class="registration-section-block">
+          <div class="section-title">🟢 Joueurs approuvés <span class="badges">${approved.length}/28</span></div>
+          <div id="approvedRegistrationList">
+            ${approved.length ? approved.map((r, i) => `
+              <div class="registration-admin-row approved-row ${r.priority ? "priority-row" : ""}">
+                <div><strong>${i + 1}. ${escapeHtml(r.name)}</strong>${r.priority ? '<span class="priority-badge">⭐ PRIORITAIRE</span>' : ''}</div>
+                <div class="registration-row-actions">
+                  <button type="button" class="secondary small-btn" data-toggle-priority="${escapeHtml(r.id)}">${r.priority ? "☆ Retirer priorité" : "⭐ Prioritaire"}</button>
+                  <button type="button" class="danger-small" data-delete-registration="${escapeHtml(r.id)}">🗑️</button>
+                </div>
+              </div>`).join("") : `<div class="muted small">Aucun joueur approuvé.</div>`}
+          </div>
+        </div>
+
+        ${rejected.length ? `<div class="registration-section-block"><div class="section-title">🚫 Refusées <span class="badges">${rejected.length}</span></div><div>${rejected.map(r => `<div class="registration-admin-row"><strong>${escapeHtml(r.name)}</strong><button type="button" class="secondary small-btn" data-reapprove-registration="${escapeHtml(r.id)}">↩ Réexaminer</button></div>`).join("")}</div></div>` : ""}
+
+        <div class="registration-next-action">
+          <button id="createTeamsFromRegistrationsBtn" class="primary full">👥 Créer / préparer les équipes avec les joueurs approuvés</button>
+        </div>
+      </div>`;
 
     const updatePlanInfo = () => {
       const { teamCount, playersPerTeam } = getRegistrationPlan();
       const min = teamCount * 5, max = teamCount * 7;
       const info = document.getElementById("registrationPlanInfo");
       if (!info) return;
-      const err = validateRegistrationPlan(rows.length, teamCount, playersPerTeam);
-      info.textContent = err ? `⚠️ ${err}` : `✓ ${rows.length} inscrits : ${teamCount} équipes de ${playersPerTeam} joueurs (capacité ${min}–${max}).`;
+      const err = validateRegistrationPlan(approved.length, teamCount, playersPerTeam);
+      info.textContent = err ? `⚠️ ${err}` : `✓ ${approved.length} approuvés : ${teamCount} équipes de ${playersPerTeam} joueurs (capacité ${min}–${max}).`;
     };
     document.getElementById("registrationTeamCount")?.addEventListener("change", updatePlanInfo);
     document.getElementById("registrationPlayersPerTeam")?.addEventListener("change", updatePlanInfo);
     updatePlanInfo();
 
-    document.getElementById("applyRegistrationPlanBtn")?.addEventListener("click", applyRegistrationTeamPlan);
-    document.getElementById("createTeamsFromRegistrationsBtn")?.addEventListener("click", () => {
-      if (accessMode !== "admin") return;
-      closeRegistrationAdmin();
-      showSetup();
-      renderTeamForm();
-      showToast("⚽ Page de création des équipes ouverte.");
-    });
     document.getElementById("toggleRegistrationBtn")?.addEventListener("click", async () => {
       const next = !settings.is_open;
-      if (next && rows.length >= 28) { showToast("La liste est complète (28 joueurs maximum)."); return; }
+      if (next && approved.length >= 28) { showToast("Les 28 places approuvées sont déjà complètes."); return; }
       const ok = await writeRegistrationSettings(next);
-      if (!ok) return;
-      await renderRegistrationAdmin();
-      showToast(next ? "📝 Inscriptions ouvertes aux visiteurs." : "🔒 Inscriptions fermées.");
-    });
-    document.getElementById("clearRegistrationsBtn")?.addEventListener("click", async () => {
-      if (!rows.length) { showToast("La liste est déjà vide."); return; }
-      if (!confirm(`Supprimer les ${rows.length} inscriptions ?`)) return;
-      if (!(await ensureAdminSession())) { showToast("🔐 Session administrateur expirée. Reconnecte-toi."); return; }
-      let result = await supabaseClient.from(REG_TABLE).delete().eq("event_id", REG_ROW_ID);
-      if (!result.error) {
-        const settingsResult = await supabaseClient
-          .from(REG_SETTINGS_TABLE)
-          .update({ is_open: false, updated_at: new Date().toISOString() })
-          .eq("id", REG_ROW_ID);
-        if (settingsResult.error) result = settingsResult;
-      }
-      if (result.error) {
-        console.error(result.error);
-        showToast(`Erreur Supabase: ${result.error.message || "impossible de vider la liste"}`);
-        return;
-      }
-      await renderRegistrationAdmin();
-      showToast("✓ Liste des inscrits vidée.");
+      if (ok) { await renderRegistrationAdmin(); showToast(next ? "📝 Demandes ouvertes." : "🔒 Demandes fermées."); }
     });
 
-    els.registrationAdminContent.querySelectorAll("[data-delete-registration]").forEach(btn => {
-      btn.addEventListener("click", async () => {
-        if (!(await ensureAdminSession())) { showToast("🔐 Session administrateur expirée. Reconnecte-toi."); return; }
-        const id = btn.dataset.deleteRegistration;
-        let result = await supabaseClient
-          .from(REG_TABLE)
-          .delete()
-          .eq("id", id)
-          .eq("event_id", REG_ROW_ID);
-        if (result.error) {
-          console.error(result.error);
-          showToast(`Erreur Supabase: ${result.error.message || "impossible de supprimer le joueur"}`);
-          return;
-        }
-        await renderRegistrationAdmin();
-        showToast("Joueur supprimé de la liste.");
-      });
+    document.getElementById("clearRegistrationsBtn")?.addEventListener("click", async () => {
+      if (!rows.length) { showToast("La liste est déjà vide."); return; }
+      if (!confirm(`Supprimer toutes les demandes et inscriptions (${rows.length}) ?`)) return;
+      if (!(await ensureAdminSession())) { showToast("🔐 Session administrateur expirée."); return; }
+      const result = await supabaseClient.from(REG_TABLE).delete().eq("event_id", REG_ROW_ID);
+      if (result.error) { showToast(`Erreur Supabase: ${result.error.message}`); return; }
+      await renderRegistrationAdmin();
+      showToast("✓ Liste vidée.");
+    });
+
+    document.getElementById("adminAddRegistrationBtn")?.addEventListener("click", async () => {
+      const input = document.getElementById("adminAddRegistrationName");
+      const name = String(input?.value || "").trim().replace(/\s+/g, " ");
+      const isPriority = !!document.getElementById("adminAddRegistrationPriority")?.checked;
+      if (name.length < 2) { showToast("Entre un nom valide."); return; }
+      if (approved.length >= 28) { showToast("28 joueurs approuvés maximum."); return; }
+      const existingAllowed = allowedPlayers.find(p => p.active && String(p.name).trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+      let allowedId = existingAllowed?.id;
+      if (!allowedId) {
+        const { data: allowedRow, error: allowedError } = await supabaseClient
+          .from(REG_ALLOWED_TABLE)
+          .insert({ event_id: REG_ROW_ID, name, priority: isPriority, active: true })
+          .select("id,name,priority,active")
+          .single();
+        if (allowedError) { showToast(`Erreur liste autorisée: ${allowedError.message}`); return; }
+        allowedId = allowedRow.id;
+      }
+      const exists = rows.some(r => String(r.allowed_player_id || "") === String(allowedId) || String(r.name || "").trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+      if (exists) { showToast("Ce joueur est déjà dans les inscriptions."); return; }
+      const { error } = await supabaseClient.from(REG_TABLE).insert({ event_id: REG_ROW_ID, allowed_player_id: allowedId, name, status: "approved", priority: isPriority });
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      await renderRegistrationAdmin();
+      showToast(`✓ ${name} ajouté${isPriority ? " comme prioritaire" : ""}.`);
+    });
+
+    document.getElementById("adminAddAllowedBtn")?.addEventListener("click", async () => {
+      const input = document.getElementById("adminAddAllowedName");
+      const name = String(input?.value || "").trim().replace(/\s+/g, " ");
+      const priorityValue = !!document.getElementById("adminAddAllowedPriority")?.checked;
+      if (name.length < 2) { showToast("Entre un nom valide."); return; }
+      const exists = allowedPlayers.some(p => String(p.name).trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+      if (exists) { showToast("Ce nom existe déjà dans la liste autorisée."); return; }
+      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).insert({ event_id: REG_ROW_ID, name, priority: priorityValue, active: true });
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      await renderRegistrationAdmin();
+      showToast(`✓ ${name} ajouté à la liste autorisée.`);
+    });
+
+    els.registrationAdminContent.querySelectorAll("[data-toggle-allowed-priority]").forEach(btn => btn.addEventListener("click", async () => {
+      const row = allowedPlayers.find(p => p.id === btn.dataset.toggleAllowedPriority);
+      if (!row) return;
+      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).update({ priority: !row.priority }).eq("id", row.id).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      await renderRegistrationAdmin();
+    }));
+
+    els.registrationAdminContent.querySelectorAll("[data-delete-allowed]").forEach(btn => btn.addEventListener("click", async () => {
+      const row = allowedPlayers.find(p => p.id === btn.dataset.deleteAllowed);
+      if (!row) return;
+      if (!confirm(`Retirer ${row.name} de la liste autorisée ? Les anciennes inscriptions ne seront pas supprimées.`)) return;
+      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).update({ active: false }).eq("id", row.id).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      await renderRegistrationAdmin();
+    }));
+
+    els.registrationAdminContent.querySelectorAll("[data-reactivate-allowed]").forEach(btn => btn.addEventListener("click", async () => {
+      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).update({ active: true }).eq("id", btn.dataset.reactivateAllowed).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      await renderRegistrationAdmin();
+    }));
+
+    els.registrationAdminContent.querySelectorAll("[data-approve-registration]").forEach(btn => btn.addEventListener("click", async () => {
+      const row = rows.find(r => r.id === btn.dataset.approveRegistration);
+      const allowed = row?.allowed_player_id ? allowedPlayers.find(p => p.id === row.allowed_player_id) : null;
+      const { error } = await supabaseClient.from(REG_TABLE).update({ status: "approved", priority: !!allowed?.priority }).eq("id", btn.dataset.approveRegistration).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      const current = await readRegistrations();
+      if (current.filter(r => (r.status || "pending") === "approved").length >= 28) await writeRegistrationSettings(false);
+      await renderRegistrationAdmin();
+    }));
+
+    els.registrationAdminContent.querySelectorAll("[data-reject-registration]").forEach(btn => btn.addEventListener("click", async () => {
+      const { error } = await supabaseClient.from(REG_TABLE).update({ status: "rejected", priority: false }).eq("id", btn.dataset.rejectRegistration).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      await renderRegistrationAdmin();
+    }));
+
+    els.registrationAdminContent.querySelectorAll("[data-reapprove-registration]").forEach(btn => btn.addEventListener("click", async () => {
+      if (approved.length >= 28) { showToast("28 joueurs approuvés maximum."); return; }
+      const { error } = await supabaseClient.from(REG_TABLE).update({ status: "pending" }).eq("id", btn.dataset.reapproveRegistration).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      await renderRegistrationAdmin();
+    }));
+
+    els.registrationAdminContent.querySelectorAll("[data-toggle-priority]").forEach(btn => btn.addEventListener("click", async () => {
+      const row = rows.find(r => r.id === btn.dataset.togglePriority);
+      if (!row) return;
+      const { error } = await supabaseClient.from(REG_TABLE).update({ priority: !row.priority }).eq("id", row.id).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      await renderRegistrationAdmin();
+    }));
+
+    els.registrationAdminContent.querySelectorAll("[data-delete-registration]").forEach(btn => btn.addEventListener("click", async () => {
+      const { error } = await supabaseClient.from(REG_TABLE).delete().eq("id", btn.dataset.deleteRegistration).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      await renderRegistrationAdmin();
+    }));
+
+    document.getElementById("applyRegistrationPlanBtn")?.addEventListener("click", applyRegistrationTeamPlan);
+    document.getElementById("createTeamsFromRegistrationsBtn")?.addEventListener("click", () => {
+      closeRegistrationAdmin(); showSetup(); renderTeamForm(); showToast("⚽ Page de création des équipes ouverte.");
     });
   }
 
@@ -678,11 +844,11 @@ function renderTeamForm(draft = null) {
     }
     const exists = rows.some(r => String(r.name || "").trim().toLocaleLowerCase() === name.toLocaleLowerCase());
     if (exists) { showToast("Ce nom est déjà inscrit."); return; }
-    const { error } = await supabaseClient.from(REG_TABLE).insert({ event_id: REG_ROW_ID, name });
+    const { error } = await supabaseClient.from(REG_TABLE).insert({ event_id: REG_ROW_ID, name, status: "pending", priority: false });
     if (error) { console.error(error); showToast("Impossible de valider l'inscription."); return; }
     els.registrationName.value = "";
     await enterRegistrationMode();
-    showToast("✓ Inscription enregistrée.");
+    showToast("✓ Demande envoyée. L’administrateur doit confirmer ta participation.");
   }
 
   function registrationTeamPlan(count) {
@@ -746,7 +912,7 @@ function renderTeamForm(draft = null) {
   async function applyRegistrationTeamPlan() {
     if (accessMode !== "admin") return;
     const rows = await readRegistrations();
-    const total = rows.length;
+    const total = rows.filter(r => (r.status || "approved") === "approved").length;
     const { teamCount, playersPerTeam } = getRegistrationPlan();
     const error = validateRegistrationPlan(total, teamCount, playersPerTeam);
     if (error) { showToast(error); return; }
@@ -793,6 +959,23 @@ function renderTeamForm(draft = null) {
         const el = document.getElementById("liveConnection");
         if (el) el.textContent = status === "SUBSCRIBED" ? "🟢 En direct" : "Connexion live : " + status;
       });
+  }
+
+  async function restoreAdminSession() {
+    if (!supabaseClient) initSupabase();
+    if (!supabaseClient) { showAccess(); return; }
+    try {
+      const { data } = await supabaseClient.auth.getSession();
+      if (data?.session?.user?.email === window.SF_SUPABASE?.adminEmail) {
+        accessMode = "admin";
+        const remote = await remoteRead();
+        if (remote) { state = remote; migrateTeamColors(); }
+        else { const local = loadState(); if (local) { state = local; migrateTeamColors(); } }
+        showDashboard();
+        return;
+      }
+    } catch (error) { console.error("Session restore error", error); }
+    showAccess();
   }
 
   function showAccess() {
@@ -1920,9 +2103,11 @@ function renderTeamForm(draft = null) {
     renderGame();
     if (state.matchStarted && !state.timerPaused) startTimer();
   });
-  els.dashboardLogoutBtn?.addEventListener("click", () => {
+  els.dashboardLogoutBtn?.addEventListener("click", async () => {
+    try { if (supabaseClient) await supabaseClient.auth.signOut(); } catch (error) { console.error("Logout error", error); }
     accessMode = "none";
     showAccess();
+    showToast("✓ Déconnexion effectuée.");
   });
   els.continueBtn.addEventListener("click", () => {
     if (accessMode !== "admin") { showToast("🔒 Action réservée à l'administrateur."); return; }
@@ -1957,6 +2142,11 @@ function renderTeamForm(draft = null) {
   els.importInput.addEventListener("change", importTournament);
 
   initSupabase();
+  if (supabaseClient) {
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") { accessMode = "none"; showAccess(); }
+    });
+  }
   document.getElementById("adminAccessBtn")?.addEventListener("click", () => document.getElementById("adminLoginBox")?.classList.remove("hidden"));
   document.getElementById("adminLoginBtn")?.addEventListener("click", enterAdminMode);
   document.getElementById("adminPassword")?.addEventListener("keydown", e => { if(e.key === "Enter") enterAdminMode(); });
@@ -1965,13 +2155,15 @@ function renderTeamForm(draft = null) {
   document.getElementById("registerAccessBtn")?.addEventListener("click", enterRegistrationMode);
   document.getElementById("registerPlayerBtn")?.addEventListener("click", submitRegistration);
   document.getElementById("registrationBackBtn")?.addEventListener("click", showAccess);
-  els.registrationName?.addEventListener("keydown", e => { if(e.key === "Enter") submitRegistration(); });
+  els.registrationName?.addEventListener("change", () => {});
   document.getElementById("liveBackBtn")?.addEventListener("click", showAccess);
 
   renderTeamForm();
 
   const existing = loadState();
-  // The public entry screen is shown first. Local/online tournament state is loaded after Admin or Live is selected.
+  // Restore the Supabase admin session after refresh. The password is not requested again
+  // while the authenticated session remains valid.
+  restoreAdminSession();
 })();
 
   document.addEventListener("visibilitychange", () => {

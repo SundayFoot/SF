@@ -42,9 +42,12 @@
           <button id="registrationBackBtn" class="secondary">Accueil</button>
         </div>
         <div id="registrationFormBox" class="registration-form-box hidden">
-          <label>Ton nom / prénom
-            <input id="registrationName" type="text" maxlength="60" placeholder="Ex. Yassine" autocomplete="name">
+          <label>Choisis ton nom dans la liste
+            <select id="registrationName" autocomplete="name">
+              <option value="">-- Sélectionner mon nom --</option>
+            </select>
           </label>
+          <p class="muted small">Tu peux t'inscrire uniquement si l'administrateur a ajouté ton nom à la liste des joueurs autorisés.</p>
           <button id="registerPlayerBtn" class="primary full">✅ Je m'inscris</button>
         </div>
         <div id="registrationClosedBox" class="hidden">

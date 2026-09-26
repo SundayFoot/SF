@@ -1,4 +1,4 @@
-# Sunday Football V6.10
+# Sunday Football V6.12
 
 ## Nouveauté : inscriptions des joueurs avant dimanche
 
@@ -47,15 +47,19 @@ Le projet reste compatible avec GitHub Pages. Les fichiers principaux sont :
 
 `supabase.sql` sert à configurer la base Supabase.
 
-## V6.10
+## V6.12
 - Inscriptions du dimanche moved to a dedicated admin page.
 - Admin can open/close registrations from that page.
 - Admin can view and manage the registration list before creating a tournament.
 - Registration management is no longer embedded in the current-team panel.
 - Added server-side admin RPCs for registration controls.
 
-V6.10: code admin clavier texte sur mobile, couleurs des équipes, vibrations buts/fins de match et annonces colorées d'entrée.
+V6.12: code admin clavier texte sur mobile, couleurs des équipes, vibrations buts/fins de match et annonces colorées d'entrée.
 
-V6.10: dashboard d'accueil, pages séparées, bouton préparation des équipes, fallback Supabase pour les RPC manquantes, annonce d'entrée avant le score.
+V6.12: dashboard d'accueil, pages séparées, bouton préparation des équipes, fallback Supabase pour les RPC manquantes, annonce d'entrée avant le score.
 
-V6.10: suppression de la dépendance aux RPC d'inscriptions, gestion joueurs avec liste visible, suppression par icône et ajout par champ dédié.
+V6.12: suppression de la dépendance aux RPC d'inscriptions, gestion joueurs avec liste visible, suppression par icône et ajout par champ dédié.
+
+V6.12: session admin persistante après refresh, vraie déconnexion Supabase, inscriptions soumises en attente, validation admin, priorité, ajout direct des joueurs connus et limite de 28 joueurs approuvés.
+
+V6.12: inscriptions uniquement depuis une liste blanche créée par l'administrateur, avec priorité gérée côté admin.

@@ -155,10 +155,10 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
   justify-content:center;
 }
 
-.player-editor{margin-top:6px;padding:8px;border:1px solid #4b4e53;border-radius:10px}
+.player-editor{margin-top:6px;padding:8px;border:1px solid #d1d5db;border-radius:10px}
 .player-editor-title{font-size:12px;font-weight:700;margin-bottom:6px}
 .player-editor-list{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px}
-.player-chip{display:inline-flex;align-items:center;gap:3px;padding:4px 6px;border-radius:999px;border:1px solid #d1d5db;font-size:12px;background:#444141}
+.player-chip{display:inline-flex;align-items:center;gap:3px;padding:4px 6px;border-radius:999px;border:1px solid #d1d5db;font-size:12px;background:#fff}
 .player-remove-btn{border:0;background:transparent;padding:0 2px;font-size:14px;line-height:1;cursor:pointer}
 .player-add-btn,.pause-resume-btn{font-size:12px;padding:6px 9px;min-height:32px}
 .timer-controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin:8px 0}
@@ -167,14 +167,14 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
 .topbar-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .manage-panel{margin-top:12px}
 .manage-card{max-width:760px;margin:0 auto}
-.manage-team-card{border:1px solid #36383b;border-radius:12px;padding:10px;margin-top:10px;background:#312f2f}
+.manage-team-card{border:1px solid #d1d5db;border-radius:12px;padding:10px;margin-top:10px;background:#fff}
 .manage-team-head{display:flex;align-items:end;justify-content:space-between;gap:8px}
 .manage-team-name{display:flex;flex-direction:column;gap:4px;flex:1;font-size:12px;font-weight:700}
-.manage-team-name-input,.manage-player-input{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:8px;padding:7px 8px;font-size:14px;background:#413e3e}
+.manage-team-name-input,.manage-player-input{width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:8px;padding:7px 8px;font-size:14px;background:#fff}
 .manage-player-list{display:grid;gap:5px;margin:8px 0}
 .manage-player-row{display:flex;gap:5px;align-items:center}
 .manage-player-row .manage-player-input{flex:1}
-.danger-small{border:1px solid #dc2626;background:#302e2e;color:#b91c1c;border-radius:7px;min-width:32px;height:32px;font-weight:700}
+.danger-small{border:1px solid #dc2626;background:#fff;color:#b91c1c;border-radius:7px;min-width:32px;height:32px;font-weight:700}
 .manage-add-player{font-size:12px;padding:6px 9px}
 .manage-actions{display:flex;justify-content:flex-end;margin-top:12px}
 
@@ -324,3 +324,36 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
   .manage-add-player-row { grid-template-columns: 1fr; }
   .manage-add-player-row button { width: 100%; }
 }
+
+
+/* V6.11 — controlled registration / approval UI */
+.registration-stats-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:14px 0; }
+.registration-stat { padding:12px; border:1px solid var(--border); border-radius:14px; background:var(--card2); display:flex; flex-direction:column; gap:3px; }
+.registration-stat strong { font-size:22px; }
+.registration-stat.pending { border-left:4px solid #f59e0b; }
+.registration-stat.priority { border-left:4px solid #eab308; }
+.registration-admin-add { padding:14px; border:1px solid var(--border); border-radius:14px; background:var(--card2); margin-bottom:14px; }
+.registration-add-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:8px; align-items:center; }
+.priority-check { display:flex; align-items:center; gap:6px; white-space:nowrap; }
+.registration-section-block { margin-top:16px; }
+.registration-admin-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--border); border-radius:12px; background:var(--card2); margin:7px 0; }
+.pending-row { border-left:4px solid #f59e0b; }
+.approved-row { border-left:4px solid #22c55e; }
+.priority-row { box-shadow: inset 0 0 0 1px rgba(234,179,8,.35); }
+.registration-row-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+.small-btn { padding:8px 10px; font-size:13px; }
+.priority-badge { display:inline-block; margin-left:8px; padding:3px 7px; border-radius:999px; background:#fef3c7; color:#92400e; font-size:11px; font-weight:800; }
+@media (max-width: 650px) {
+  .registration-stats-grid { grid-template-columns:1fr; }
+  .registration-add-row { grid-template-columns:1fr; }
+  .registration-admin-row { align-items:flex-start; flex-direction:column; }
+  .registration-row-actions { width:100%; justify-content:stretch; }
+  .registration-row-actions button { flex:1; }
+}
+
+/* V6.12 — admin whitelist for Sunday registrations */
+.allowed-list-admin { border: 2px solid var(--border); }
+.allowed-player-admin-list { margin-top: 10px; }
+.allowed-row { border-left: 4px solid var(--accent); }
+.inactive-row { opacity: .55; }
+#registrationName { font-size: 16px; }
