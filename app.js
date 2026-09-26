@@ -507,15 +507,58 @@ function renderTeamForm(draft = null) {
   }
 
   function renderPublicAllowedPlayerSelect(players, selectedId = "") {
-    const select = els.registrationName;
-    if (!select) return;
+    const input = document.getElementById("registrationNameSearch");
+    const hidden = els.registrationName;
+    const results = document.getElementById("registrationNameResults");
+    if (!input || !hidden || !results) return;
+
     const list = Array.isArray(players) ? players : [];
-    select.innerHTML = `<option value="">-- Sélectionner mon nom --</option>` + list.map(p =>
-      `<option value="${escapeHtml(p.id)}" ${String(selectedId) === String(p.id) ? "selected" : ""}>${escapeHtml(p.name)}</option>`
-    ).join("");
-    select.disabled = list.length === 0;
-    if (els.registerPlayerBtn) els.registerPlayerBtn.disabled = list.length === 0;
+    let currentId = String(selectedId || "");
+    hidden.value = currentId;
+    const selected = list.find(p => String(p.id) === currentId);
+    input.value = selected ? String(selected.name || "") : "";
+
+    const paint = () => {
+      const query = String(input.value || "").trim().toLocaleLowerCase();
+      const filtered = query
+        ? list.filter(p => String(p.name || "").toLocaleLowerCase().startsWith(query))
+        : list;
+      const limited = filtered.slice(0, 12);
+      results.innerHTML = limited.length
+        ? limited.map(p => `<button type="button" class="registration-name-option ${String(p.id) === currentId ? "selected" : ""}" data-registration-player-id="${escapeHtml(p.id)}">${escapeHtml(p.name)}</button>`).join("")
+        : `<div class="registration-name-empty">Aucun nom correspondant.</div>`;
+
+      results.querySelectorAll("[data-registration-player-id]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const person = list.find(p => String(p.id) === String(btn.dataset.registrationPlayerId));
+          if (!person) return;
+          currentId = String(person.id);
+          hidden.value = currentId;
+          input.value = String(person.name || "");
+          results.innerHTML = `<button type="button" class="registration-name-option selected">✓ ${escapeHtml(person.name)}</button>`;
+          const selectedLabel = document.getElementById("registrationSelectedName");
+          if (selectedLabel) {
+            selectedLabel.textContent = `✓ Nom sélectionné : ${person.name}`;
+            selectedLabel.classList.remove("hidden");
+          }
+          document.getElementById("registrationNoNameMessage")?.classList.add("hidden");
+          if (els.registerPlayerBtn) els.registerPlayerBtn.disabled = false;
+        });
+      });
+    };
+
+    input.disabled = list.length === 0;
+    if (els.registerPlayerBtn) els.registerPlayerBtn.disabled = list.length === 0 || !currentId;
     document.getElementById("registrationNoNameMessage")?.classList.toggle("hidden", list.length > 0);
+
+    input.oninput = () => {
+      currentId = "";
+      hidden.value = "";
+      document.getElementById("registrationSelectedName")?.classList.add("hidden");
+      paint();
+      if (els.registerPlayerBtn) els.registerPlayerBtn.disabled = true;
+    };
+    paint();
   }
 
   async function readRegistrations() {
@@ -666,8 +709,8 @@ function renderTeamForm(draft = null) {
         ${rejected.length ? `<div class="registration-section-block"><div class="section-title">🚫 Refusées <span class="badges">${rejected.length}</span></div><div>${rejected.map(r => `<div class="registration-admin-row"><strong>${escapeHtml(r.name)}</strong><button type="button" class="secondary small-btn" data-reapprove-registration="${escapeHtml(r.id)}">↩ Réexaminer</button></div>`).join("")}</div></div>` : ""}
 
         <div class="registration-next-action">
-          <button id="createTeamsFromRegistrationsBtn" class="primary full">🎲 Préparer les équipes et faire le tirage</button>
-          <p class="muted small">Quand la liste est prête, ce bouton crée la configuration choisie et répartit automatiquement les joueurs approuvés dans les équipes.</p>
+          <button id="createTeamsFromRegistrationsBtn" class="primary full">👥 Préparer les équipes</button>
+          <p class="muted small">Cette étape prépare les équipes. Ensuite, choisis un capitaine par équipe et lance le tirage au sort.</p>
         </div>
       </div>`;
 
@@ -701,6 +744,7 @@ function renderTeamForm(draft = null) {
     });
 
     document.getElementById("adminAddRegistrationBtn")?.addEventListener("click", async () => {
+      if (!(await ensureAdminSession())) { showToast("🔐 Session administrateur expirée. Reconnecte-toi."); return; }
       const input = document.getElementById("adminAddRegistrationName");
       const name = String(input?.value || "").trim().replace(/\s+/g, " ");
       const isPriority = !!document.getElementById("adminAddRegistrationPriority")?.checked;
@@ -834,9 +878,8 @@ function renderTeamForm(draft = null) {
     els.registrationFormBox?.classList.toggle("hidden", !open);
     els.registrationClosedBox?.classList.toggle("hidden", open);
     const allowedPlayers = open ? await readAllowedPlayers() : [];
-    if (els.registrationFeedback) {
+    if (els.registrationFeedback && !els.registrationFeedback.innerHTML.trim()) {
       els.registrationFeedback.classList.add("hidden");
-      els.registrationFeedback.innerHTML = "";
     }
     renderPublicAllowedPlayerSelect(allowedPlayers);
     const rows = open ? await readRegistrations() : [];
@@ -970,34 +1013,23 @@ function renderTeamForm(draft = null) {
     if (planError) { showToast(planError); return; }
 
     if (state?.history?.length || state?.matchStarted || state?.matchNumber > 1) {
-      showToast("Un tournoi est déjà commencé. Termine-le avant de refaire le tirage.");
+      showToast("Un tournoi est déjà commencé. Termine-le avant de refaire la préparation.");
       return;
     }
-    if (state && state.active && !confirm("Un tournoi est déjà préparé. Remplacer sa répartition par celle des joueurs inscrits ?")) return;
 
     const teams = Array.from({ length: teamCount }, (_, i) => ({
-      id: "team_" + i,
-      name: defaultNames[i] || `Équipe ${i + 1}`,
-      color: defaultColors[i % defaultColors.length],
-      captain: "",
-      players: [],
-      image: "",
+      id: "team_" + i, name: defaultNames[i] || `Équipe ${i + 1}`,
+      color: defaultColors[i % defaultColors.length], captain: "", players: [], image: "",
       wins: 0, draws: 0, losses: 0, points: 0, goalsFor: 0, goalsAgainst: 0
     }));
 
     state = createEmptyState(teams, 5);
     state.queue = teams.map((_, i) => i);
-
-    const shuffled = shuffleArray([...names]);
-    shuffled.forEach((name, i) => {
-      teams[i % teamCount].players.push(name);
-    });
-
+    state.captains = [];
     saveState();
     migrateTeamColors();
     showTeamManagementPage();
-    renderManageTeams();
-    showToast(`🎲 Tirage terminé : ${names.length} joueurs répartis dans ${teamCount} équipes.`);
+    showToast(`✓ ${names.length} joueurs prêts. Choisis un capitaine par équipe, puis lance le tirage.`);
   }
 
   async function drawRegisteredPlayers() {
@@ -1010,8 +1042,10 @@ function renderTeamForm(draft = null) {
     if(planError){showToast(planError);return;}
     if(!state.teams?.length||state.teams.length!==plan.teamCount){showToast(`Le tournoi doit avoir ${plan.teamCount} équipes.`);return;}
 
-    const captains=state.teams.map((_,i)=>String(state.captains?.[i]||"").trim());
+    const uiCaptains = state.teams.map((_,i)=>String(document.querySelector(`[data-captain-team="${i}"]`)?.value||"").trim());
+    const captains = uiCaptains.every(Boolean) ? uiCaptains : state.teams.map((_,i)=>String(state.captains?.[i]||"").trim());
     if(captains.some(c=>!c)){showToast("🧢 Choisis un capitaine pour chaque équipe avant le tirage.");return;}
+    state.captains = captains;
     if(new Set(captains.map(x=>x.toLocaleLowerCase())).size!==captains.length){showToast("⚠️ Chaque équipe doit avoir un capitaine différent.");return;}
 
     const approvedMap=new Map(names.map(n=>[n.toLocaleLowerCase(),n]));
@@ -1910,8 +1944,6 @@ function renderTeamForm(draft = null) {
     const selected=state.teams.map((_,i)=>String(els.manageTeamsContent.querySelector(`[data-captain-team="${i}"]`)?.value||"").trim());
     const nonEmpty=selected.filter(Boolean);
     if(new Set(nonEmpty.map(x=>x.toLocaleLowerCase())).size!==nonEmpty.length){showToast("⚠️ Un même joueur ne peut pas être capitaine de plusieurs équipes.");return;}
-    const captainOutsideTeam=selected.some((captain,i)=>captain && !state.teams[i].players.some(p=>playerDisplayName(p).toLocaleLowerCase()===captain.toLocaleLowerCase()));
-    if(captainOutsideTeam){showToast("⚠️ Chaque capitaine doit appartenir à son équipe.");return;}
     state.captains=selected;
 
     saveState();renderGame();renderManageTeams();refreshCaptainSelection();
@@ -1948,21 +1980,8 @@ function renderTeamForm(draft = null) {
     }
 
     if (state.phase === "complete" || state.tournamentWinnerId !== null) {
-      const winner=state.teams[state.tournamentWinnerId];
-      const final=state.finalResult;
-      const ranking=sortedTeams().map((t,i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(t.name)}</strong><span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span></div>`).join("");
-      const finalScore=final?`${escapeHtml(state.teams[final.winnerId]?.name||"—")} ${final.scoreA} - ${final.scoreB} ${escapeHtml(state.teams[final.loserId]?.name||"—")}`:"—";
-      const teams=state.teams.map((t,i)=>`<div class="public-final-team"><div><span class="team-color-dot" style="background:${getTeamColor(t,i)}"></span><strong>${escapeHtml(t.name)}</strong></div><span class="badges">${Array.isArray(t.players)?t.players.length:0} joueurs</span></div>`).join("");
-      els.dashboardTournamentInfo.innerHTML=`
-        <div class="card-mini final-admin-dashboard">
-          <div class="tournament-finished-status final-status-inline">🏆 TOURNOI TERMINÉ</div>
-          <div class="final-admin-winner">Champion : <strong style="color:${getTeamColor(winner,state.tournamentWinnerId||0)}">${escapeHtml(winner?.name||"—")}</strong></div>
-          <div class="final-admin-score"><span>🏆 Finale</span><strong>${finalScore}</strong></div>
-        </div>
-        <div class="dashboard-final-grid">
-          <div class="card-mini"><strong>🏆 Classement final</strong>${ranking}</div>
-          <div class="card-mini"><strong>👥 Équipes</strong>${teams}</div>
-        </div>`;
+      els.dashboardTournamentInfo.innerHTML =
+        `<div class="card-mini"><strong>🏁 Tournoi terminé</strong><p class="muted small">Le tournoi est terminé. Ouvre <strong>Tournoi</strong> pour voir la finale, le résultat et le classement final.</p></div>`;
       return;
     }
 
@@ -1995,6 +2014,8 @@ function renderTeamForm(draft = null) {
     els.resumeBanner.classList.add("hidden");
     if (els.manageTeamsBtn) els.manageTeamsBtn.classList.remove("hidden");
     if (els.newTournamentBtn) els.newTournamentBtn.classList.remove("hidden");
+    renderGame();
+    renderFinals();
     scheduleAdminIdleLogout();
   }
 
@@ -2139,7 +2160,7 @@ function renderTeamForm(draft = null) {
       state.phaseMatch=null;
       state.phaseMatchStarted=false;
       state.phaseSecondsLeft=0;
-      saveState(); renderFinals();
+      saveState(); renderGame(); renderFinals();
       showToast(`🏆 ${state.teams[winnerId].name} est champion !`);
     }
   }
@@ -2191,35 +2212,45 @@ function renderTeamForm(draft = null) {
   }
 
   function renderFinals() {
-    if (!state || state.teams.length<4) return;
+    if (!state || state.teams.length < 4) {
+      els.finalScreen?.classList.add("hidden");
+      return;
+    }
+
     els.finalScreen.classList.remove("hidden");
-    let html=`<div class="phase-card"><div class="phase-title">📊 Classement</div>
+    let html = `<div class="phase-card">
+      <div class="phase-title">📊 Classement</div>
       <div class="phase-sub">3 pts victoire · 1 pt égalité · 0 pt défaite</div>
       ${sortedTeams().map((t,i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(t.name)}</strong><span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span></div>`).join("")}
     </div>`;
 
-    if (state.phase==="league") {
-      if (state.teams.length >= 4) {
-        html+=`<div class="phase-card"><div class="phase-title">🏁 Phase finale</div>
-          <p class="muted">Quand la phase de classement est terminée, appuie ici.</p>
-          <button id="goSemifinalsBtn" class="primary full">🏆 Passer aux demi-finales</button></div>`;
-      } else {
-        html+=`<div class="phase-card"><div class="phase-title">ℹ️ Tournoi à 3 équipes</div>
-          <p class="muted">Le mode 3 équipes fonctionne normalement pour les matchs de classement. Les demi-finales nécessitent au moins 4 équipes.</p></div>`;
-      }
+    if (state.phase === "league") {
+      html += `<div class="phase-card"><div class="phase-title">🏁 Phase finale</div>
+        <p class="muted">Quand la phase de classement est terminée, passe aux demi-finales.</p>
+        <button id="goSemifinalsBtn" class="primary full">🏆 Passer aux demi-finales</button></div>`;
     } else if (state.phaseMatch) {
-      html+=phaseMatchHtml();
+      html += phaseMatchHtml();
     }
 
     if (state.semifinalResults?.length) {
-      html+=`<div class="phase-card"><div class="phase-title">Demi-finales</div>
+      html += `<div class="phase-card"><div class="phase-title">🥇 Demi-finales</div>
         ${state.semifinalResults.map(r=>`<div class="history-item"><strong>${escapeHtml(r.label)}</strong><span>🏆 ${escapeHtml(state.teams[r.winnerId].name)} · ${r.scoreA}-${r.scoreB}</span></div>`).join("")}
       </div>`;
     }
 
     if (state.finalResult) {
-      const w=state.teams[state.finalResult.winnerId];
-      html+=`<div class="phase-card final-dashboard"><div class="trophy">🏆</div><div class="phase-title">CHAMPION</div>${teamImageHtml(w,"winner-logo")}<div class="winner-name">${escapeHtml(w.name)}</div><p>Champion du tournoi</p></div>`;
+      const f=state.finalResult, w=state.teams[f.winnerId], l=state.teams[f.loserId];
+      html += `<div class="phase-card final-dashboard admin-final-result">
+        <div class="trophy">🏆</div>
+        <div class="phase-title">FINALE — DERNIER MATCH</div>
+        <div class="final-result-teams">
+          <div><strong style="color:${getTeamColor(w,f.winnerId)}">${escapeHtml(w?.name||"—")}</strong></div>
+          <div class="final-result-score">${f.scoreA} - ${f.scoreB}</div>
+          <div><strong style="color:${getTeamColor(l,f.loserId)}">${escapeHtml(l?.name||"—")}</strong></div>
+        </div>
+        <div class="final-admin-winner">🏆 Champion : <strong style="color:${getTeamColor(w,f.winnerId)}">${escapeHtml(w?.name||"—")}</strong></div>
+        ${teamImageHtml(w,"winner-logo")}
+      </div>`;
     }
 
     els.finalContent.innerHTML=html;
@@ -2230,20 +2261,8 @@ function renderTeamForm(draft = null) {
     els.finalContent.querySelectorAll("[data-pgoal]").forEach(b=>b.addEventListener("click",()=>addPhaseGoal(b.dataset.pgoal)));
     els.finalContent.querySelectorAll("[data-pplayerside]").forEach(b=>b.addEventListener("click",()=>addPhaseGoal(b.dataset.pplayerside,b.dataset.pplayername)));
     els.finalContent.querySelectorAll("[data-pwin]").forEach(b=>b.addEventListener("click",()=>finishPhaseMatch(b.dataset.pwin)));
-
-    els.dashboardScreen.classList.remove("hidden");
-    let d=`<div class="phase-card">`;
-    if(state.tournamentWinnerId!==null){
-      const w=state.teams[state.tournamentWinnerId];
-      d+=`<div class="final-dashboard"><div class="trophy">🏆</div>${teamImageHtml(w,"winner-logo")}<div class="winner-name">${escapeHtml(w.name)}</div><p>Champion du tournoi</p></div>`;
-    } else if(state.finals?.top4){
-      d+=`<div class="phase-title">Top 4 / qualification</div>${state.finals.top4.map((id,i)=>id===null?`<div class="rank-item"><strong>${i+1}. À déterminer</strong></div>`:`<div class="rank-item"><strong>${i+1}. ${escapeHtml(state.teams[id].name)}</strong><span class="badges">${state.teams[id].points} pts</span></div>`).join("")}`;
-    } else {
-      d+=`<div class="phase-title">📱 Dashboard</div><p class="muted">Le dashboard final apparaîtra ici.</p>`;
-    }
-    d+=`</div>`;
-    els.dashboardContent.innerHTML=d;
   }
+
 
   async function readImageAsDataUrl(file) {
     if (!file) return "";

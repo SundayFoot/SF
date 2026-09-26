@@ -497,3 +497,16 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
 .final-admin-score{display:flex;justify-content:center;gap:12px;align-items:center;margin-top:10px}
 .dashboard-final-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
 @media(max-width:620px){.dashboard-final-grid{grid-template-columns:1fr}}
+
+/* V6.18 UX corrections */
+.manage-team-name-input,.manage-player-input,.manage-player-team-select,.manage-team-color-select,.manage-add-player-row input,.captain-select{
+  background:#111827!important;color:#f8fafc!important;border-color:#334155!important;
+}
+.manage-team-name-input::placeholder,.manage-player-input::placeholder,.manage-add-player-row input::placeholder{color:#94a3b8!important;opacity:1}
+.danger-small{background:#111827!important;color:#fecaca!important}
+.registration-name-results{display:grid;gap:6px;max-height:260px;overflow-y:auto;margin-top:7px}
+.registration-name-option{width:100%;min-height:42px;padding:9px 12px;text-align:left;background:#172033;color:#f8fafc;border:1px solid #334155;border-radius:10px;font-size:14px}
+.registration-name-option:hover,.registration-name-option.selected{border-color:#60a5fa;background:#1e3a5f}
+.registration-name-empty{padding:10px 12px;color:#94a3b8;font-size:13px;border:1px dashed #334155;border-radius:10px}
+.registration-selected-name{margin:5px 0 0;padding:8px 10px;color:#86efac;background:#052e1b;border:1px solid #166534;border-radius:9px;font-size:12px;font-weight:700}
+.admin-final-result{text-align:center}.admin-final-result .winner-logo{margin:12px auto 0}.admin-final-result .final-result-teams{margin:14px 0}

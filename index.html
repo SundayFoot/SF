@@ -44,10 +44,11 @@
         </div>
         <div id="registrationFormBox" class="registration-form-box hidden">
           <label>Choisis ton nom dans la liste
-            <select id="registrationName" autocomplete="name">
-              <option value="">-- Sélectionner mon nom --</option>
-            </select>
+            <input id="registrationNameSearch" type="search" autocomplete="off" autocapitalize="words" placeholder="🔎 Tape le début de ton nom..." aria-label="Rechercher ton nom">
+            <input id="registrationName" type="hidden" value="">
+            <div id="registrationNameResults" class="registration-name-results" aria-live="polite"></div>
           </label>
+          <p id="registrationSelectedName" class="registration-selected-name hidden"></p>
           <p class="muted small">Tu peux t'inscrire uniquement si l'administrateur a ajouté ton nom à la liste des joueurs autorisés.</p>
           <div id="registrationNoNameMessage" class="registration-help-message hidden">
             <strong>👋 Ton nom n’apparaît pas dans la liste ?</strong>

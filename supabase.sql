@@ -642,3 +642,7 @@ with check (
 
 -- Make the public list show priority people first, then oldest added first.
 -- (The application also applies this order when reading the list.)
+
+-- V6.18 admin direct insert policy.
+drop policy if exists "admin can insert registrations" on public.player_registrations;
+create policy "admin can insert registrations" on public.player_registrations for insert to authenticated with check (auth.jwt() ->> 'email' = 'abde-ghafor@hotmail.fr');

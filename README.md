@@ -85,3 +85,5 @@ V6.17 UX:
 - Dans Équipes & joueurs, l'administrateur peut déplacer chaque joueur vers une autre équipe.
 - Après la finale, le Live et le dashboard administrateur affichent uniquement le champion, le résultat de la finale, le classement final et les équipes; aucun nouveau match n'est affiché.
 - Pour le comportement priorité immédiate en ligne, exécuter `supabase_v6_17_priority_migration.sql` dans Supabase SQL Editor.
+
+V6.18: recherche du nom par début de nom, préparation des équipes séparée du tirage, capitaines sélectionnables avant affectation, tirage utilisable sans cliquer d'abord sur Enregistrer, finale uniquement dans la page Tournoi admin, aucun match préparé après la finale, correction des champs blancs et ajout direct admin.
