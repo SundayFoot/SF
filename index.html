@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#111827">
+  <meta name="theme-color" content="#08111f">
+  <meta name="description" content="Sunday Football — inscriptions, équipes, matchs en direct et résultats du tournoi.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Sunday Football">
@@ -17,8 +18,9 @@
   <main class="app">
     <section id="accessScreen" class="screen">
       <div class="card access-card">
-        <h1>⚽ Sunday Football</h1>
-        <p class="muted">Choisis comment tu veux accéder au tournoi.</p>
+        <div class="access-brand"><img src="assets/football-mark.svg" alt="" aria-hidden="true"><h1>Sunday Football</h1></div>
+        <p class="hero-kicker">CHAQUE DIMANCHE · NOTRE TERRAIN · NOTRE ÉQUIPE</p>
+        <p class="muted access-subtitle">Inscris-toi, retrouve ton équipe et suis les matchs en direct.</p>
         <div class="access-grid">
           <button id="adminAccessBtn" class="primary full">🔐 Admin</button>
           <button id="liveAccessBtn" class="secondary full">👀 Live match</button>
@@ -84,9 +86,12 @@
       <div id="liveContent"></div>
     </section>
     <header id="appTopbar" class="topbar hidden">
-      <div>
-        <h1>⚽ Sunday Football</h1>
-        <p id="saveStatus">Sauvegarde locale activée</p>
+      <div class="brand-block">
+        <img class="brand-mark" src="assets/football-mark.svg" alt="" aria-hidden="true">
+        <div>
+          <h1>Sunday Football</h1>
+          <p id="saveStatus">Sauvegarde locale activée</p>
+        </div>
       </div>
       <div class="topbar-actions">
         <button id="homeDashboardBtn" class="secondary admin-only">🏠 Accueil</button>
@@ -106,6 +111,14 @@
           <button id="dashboardLogoutBtn" class="secondary">🔐 Déconnexion</button>
         </div>
 
+        <div class="dashboard-hero">
+          <div class="dashboard-hero-copy">
+            <span class="live-pill">● DIMANCHE FOOTBALL</span>
+            <h3>Le prochain match commence ici.</h3>
+            <p>Gère les inscriptions, compose les équipes et lance le tournoi en quelques étapes.</p>
+          </div>
+        </div>
+
         <div class="dashboard-actions">
           <button id="dashboardRegistrationBtn" class="primary full">📝 Inscriptions du dimanche</button>
           <button id="dashboardNewTournamentBtn" class="secondary full">⚽ Nouveau tournoi</button>
@@ -118,8 +131,11 @@
     </section>
 
     <section id="setupScreen" class="screen hidden">
-      <div class="card">
-        <h2>Nouveau tournoi</h2>
+      <div class="card setup-card">
+        <div class="setup-visual">
+          <img src="assets/hero-football.svg" alt="" aria-hidden="true">
+          <div><span class="live-pill">NOUVEAU TOURNOI</span><h2>Nouveau tournoi</h2></div>
+        </div>
         <p class="muted">Configure les équipes avant de commencer. Les données sont sauvegardées automatiquement sur ce téléphone.</p>
 
         <div class="grid two">

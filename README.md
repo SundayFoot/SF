@@ -87,3 +87,18 @@ V6.17 UX:
 - Pour le comportement priorité immédiate en ligne, exécuter `supabase_v6_17_priority_migration.sql` dans Supabase SQL Editor.
 
 V6.18: recherche du nom par début de nom, préparation des équipes séparée du tirage, capitaines sélectionnables avant affectation, tirage utilisable sans cliquer d'abord sur Enregistrer, finale uniquement dans la page Tournoi admin, aucun match préparé après la finale, correction des champs blancs et ajout direct admin.
+
+
+# V7 — Design UI/UX
+Les images locales sont dans `assets/` :
+- `assets/hero-football.svg` : image principale de l'accueil, dashboard et match.
+- `assets/trophy.svg` : visuel du champion/finale.
+- `assets/football-mark.svg` : logo football de l'application.
+
+Pour remplacer les visuels plus tard, il suffit de garder les mêmes noms de fichiers et de remplacer les SVG par des images adaptées, ou de modifier les chemins dans `style.css`.
+
+
+## V7.1 — maillots et lancement automatique
+- Les maillots locaux sont dans `assets/jersey-*.svg` et sont utilisés dans Live, Équipes, prochain match et gestion Admin.
+- Après le tirage, `Enregistrer les modifications` lance automatiquement le tournoi et prépare le premier match. Le chrono reste volontairement en pause : l’Admin appuie ensuite sur `Commencer le match`.
+- Les déplacements de joueurs restent possibles depuis `Équipes & joueurs` sans créer un nouveau tournoi, tant que les équipes restent entre 5 et 7 joueurs.

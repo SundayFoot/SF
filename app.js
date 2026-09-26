@@ -135,6 +135,19 @@ function editTeamPlayers(teamId) {
     const color = team?.color;
     return teamColorChoices.some(([value]) => value === color) ? color : defaultColors[index % defaultColors.length];
   }
+
+  function teamJerseyAsset(team, index = 0) {
+    const color = getTeamColor(team, index).toLowerCase();
+    const map = {
+      "#ef4444":"red", "#22c55e":"green", "#eab308":"yellow", "#3b82f6":"blue",
+      "#f97316":"orange", "#a855f7":"purple", "#111827":"black", "#f8fafc":"white"
+    };
+    return `assets/jersey-${map[color] || "blue"}.svg`;
+  }
+
+  function teamJerseyHtml(team, index = 0, cls = "team-jersey") {
+    return `<img class="${cls}" src="${teamJerseyAsset(team,index)}" alt="Maillot ${escapeHtml(team?.name || "équipe")}" loading="lazy">`;
+  }
   function vibrate(pattern = [80]) {
     try {
       if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") navigator.vibrate(pattern);
@@ -1224,6 +1237,7 @@ function renderTeamForm(draft = null) {
           <h3>${escapeHtml(team.name)}</h3>
           <span class="team-player-count">${players.length} joueur${players.length > 1 ? "s" : ""}</span>
         </div>
+        <div class="public-team-jersey">${teamJerseyHtml(team,index)}</div>
         <div class="public-team-players">
           ${players.length
             ? players.map((name,i)=>`<div class="public-player-row"><span class="public-player-number">${i+1}</span><span>${escapeHtml(name)}</span></div>`).join("")
@@ -1273,10 +1287,10 @@ function renderTeamForm(draft = null) {
     if (state.phase !== "complete" && state.tournamentWinnerId === null && state.phaseMatch && state.phase !== "league") {
       const m=state.phaseMatch, a=team(m.a), b=team(m.b);
       const phaseName=state.phase === "playoff" ? "MATCH ÉLIMINATOIRE" : state.phase === "semifinal" ? "DEMI-FINALE" : "FINALE";
-      matchHtml += `<div class="live-team-head"><div class="muted small">${phaseName}</div></div><div class="live-time" id="liveTimer">${formatTime(state.phaseSecondsLeft)}</div><div class="live-score"><div class="live-team"><strong style="color:${getTeamColor(a, m.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${m.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersA)}</div></div><div>VS</div><div class="live-team"><strong style="color:${getTeamColor(b, m.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${m.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersB)}</div></div></div><p class="muted">${state.phaseMatchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
+      matchHtml += `<div class="live-team-head"><div class="muted small">${phaseName}</div></div><div class="live-time" id="liveTimer">${formatTime(state.phaseSecondsLeft)}</div><div class="live-score"><div class="live-team"><div class="live-jersey">${teamJerseyHtml(a,m.a)}</div><strong style="color:${getTeamColor(a, m.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${m.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersA)}</div></div><div class="live-vs">VS</div><div class="live-team"><div class="live-jersey">${teamJerseyHtml(b,m.b)}</div><strong style="color:${getTeamColor(b, m.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${m.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersB)}</div></div></div><p class="muted">${state.phaseMatchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
     } else if (state.active) {
       const a=team(state.active.a), b=team(state.active.b);
-      matchHtml += `<div class="live-team-head"><div class="muted small">MATCH #${state.matchNumber}</div></div><div class="live-time" id="liveTimer">${formatTime(state.secondsLeft)}</div><div class="live-score"><div class="live-team"><strong style="color:${getTeamColor(a, state.active.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${state.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersA)}</div></div><div>VS</div><div class="live-team"><strong style="color:${getTeamColor(b, state.active.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${state.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersB)}</div></div></div>`;
+      matchHtml += `<div class="live-team-head"><div class="muted small">MATCH #${state.matchNumber}</div></div><div class="live-time" id="liveTimer">${formatTime(state.secondsLeft)}</div><div class="live-score"><div class="live-team"><div class="live-jersey">${teamJerseyHtml(a,state.active.a)}</div><strong style="color:${getTeamColor(a, state.active.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${state.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersA)}</div></div><div class="live-vs">VS</div><div class="live-team"><div class="live-jersey">${teamJerseyHtml(b,state.active.b)}</div><strong style="color:${getTeamColor(b, state.active.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${state.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersB)}</div></div></div>`;
       matchHtml += `<p class="muted">${state.matchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
     } else {
       matchHtml += `<h3>Pas de match en cours</h3>`;
@@ -1702,8 +1716,8 @@ function renderTeamForm(draft = null) {
     if (state.active && state.phase !== "complete" && state.tournamentWinnerId === null) {
       const preA = state.teams[state.active.a];
       const preB = state.teams[state.active.b];
-      els.preTeamA.textContent = preA?.name || "—";
-      els.preTeamB.textContent = preB?.name || "—";
+      els.preTeamA.innerHTML = `${teamJerseyHtml(preA,state.active.a,"pre-team-jersey")}<span>${escapeHtml(preA?.name || "—")}</span>`;
+      els.preTeamB.innerHTML = `${teamJerseyHtml(preB,state.active.b,"pre-team-jersey")}<span>${escapeHtml(preB?.name || "—")}</span>`;
       els.preTeamA.style.color = preA ? getTeamColor(preA, state.active.a) : "";
       els.preTeamB.style.color = preB ? getTeamColor(preB, state.active.b) : "";
       els.preMatchCard.classList.toggle("hidden", !!state.matchStarted);
@@ -1733,8 +1747,8 @@ function renderTeamForm(draft = null) {
       const a = state.teams[state.active.a];
       const b = state.teams[state.active.b];
 
-      els.teamAName.textContent = a.name;
-      els.teamBName.textContent = b.name;
+      els.teamAName.innerHTML = `${teamJerseyHtml(a,state.active.a,"admin-match-jersey")}<span>${escapeHtml(a.name)}</span>`;
+      els.teamBName.innerHTML = `${teamJerseyHtml(b,state.active.b,"admin-match-jersey")}<span>${escapeHtml(b.name)}</span>`;
       els.teamAName.style.color = getTeamColor(a, state.active.a);
       els.teamBName.style.color = getTeamColor(b, state.active.b);
       els.scoreA.textContent = state.scoreA;
@@ -1751,8 +1765,8 @@ function renderTeamForm(draft = null) {
       els.leaderPoints.textContent = sortedTeams()[0]?.points ?? 0;
       els.drawBtn.textContent = `🤝 Égalité — 0-0 après ${state.settings.matchMinutes} min`;
     } else {
-      els.teamAName.textContent = "—";
-      els.teamBName.textContent = "—";
+      els.teamAName.innerHTML = `<span>—</span>`;
+      els.teamBName.innerHTML = `<span>—</span>`;
       els.teamAName.style.color = "";
       els.teamBName.style.color = "";
       els.scoreA.textContent = "0";
@@ -1764,16 +1778,16 @@ function renderTeamForm(draft = null) {
     els.queueList.innerHTML = state.queue.length
       ? state.queue.map((id, index) => {
           const t = state.teams[id];
-          return `<div class="queue-item">
-            <div class="row-left"><span class="queue-num">${index + 1}</span><strong>${escapeHtml(t.name)}</strong></div>
+          return `<div class="queue-item" style="--team-color:${escapeHtml(getTeamColor(t,id))}">
+            <div class="row-left"><span class="queue-num">${index + 1}</span>${teamJerseyHtml(t,id,"queue-jersey")}<strong style="color:${getTeamColor(t,id)}">${escapeHtml(t.name)}</strong></div>
             <span class="badges">${t.points} pts</span>
           </div>`;
         }).join("")
       : `<div class="muted">Aucune équipe en attente.</div>`;
 
     els.rankingList.innerHTML = sortedTeams().map((t, i) =>
-      `<div class="rank-item">
-        <div class="row-left"><strong>${i + 1}. ${escapeHtml(t.name)}</strong></div>
+      `<div class="rank-item" style="--team-color:${escapeHtml(getTeamColor(t,i))}">
+        <div class="row-left"><span class="rank-position">${i + 1}</span>${teamJerseyHtml(t,i,"rank-jersey")}<strong style="color:${getTeamColor(t,i)}">${escapeHtml(t.name)}</strong></div>
         <span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span>
       </div>`
     ).join("");
@@ -1841,6 +1855,7 @@ function renderTeamForm(draft = null) {
           <div class="manage-team-head">
             <div class="manage-team-title">
               <span class="team-color-dot" style="background:${getTeamColor(team, teamIndex)}"></span>
+              ${teamJerseyHtml(team,teamIndex,"manage-team-jersey")}
               <strong style="color:${getTeamColor(team, teamIndex)}">Équipe ${escapeHtml(team.name)}</strong>
               <span class="badges">${players.length} joueur${players.length > 1 ? "s" : ""}</span>
             </div>
@@ -1939,6 +1954,8 @@ function renderTeamForm(draft = null) {
     }
     const tooMany=next.findIndex(p=>p.length>7);
     if(tooMany>=0){showToast(`⚠️ Équipe ${state.teams[tooMany].name} dépasse 7 joueurs.`);return;}
+    const tooFew=next.findIndex(p=>p.length<5);
+    if(tooFew>=0){showToast(`⚠️ Équipe ${state.teams[tooFew].name} doit avoir au moins 5 joueurs.`);return;}
     state.teams.forEach((team,i)=>team.players=next[i]);
 
     const selected=state.teams.map((_,i)=>String(els.manageTeamsContent.querySelector(`[data-captain-team="${i}"]`)?.value||"").trim());
@@ -1946,8 +1963,19 @@ function renderTeamForm(draft = null) {
     if(new Set(nonEmpty.map(x=>x.toLocaleLowerCase())).size!==nonEmpty.length){showToast("⚠️ Un même joueur ne peut pas être capitaine de plusieurs équipes.");return;}
     state.captains=selected;
 
-    saveState();renderGame();renderManageTeams();refreshCaptainSelection();
-    showToast("✓ Équipes, déplacements et capitaines enregistrés.");
+    const firstTournamentLaunch = !state.active && !state.history?.length && Number(state.matchNumber || 0) === 0;
+    saveState();
+
+    if (firstTournamentLaunch) {
+      if (state.teams.length < 2) { showToast("⚠️ Il faut au moins 2 équipes."); return; }
+      state.queue = state.teams.map((_, i) => i);
+      startFirstMatch();
+      showToast("⚽ Tournoi créé. Le premier match est prêt — le chrono reste en pause.");
+      return;
+    }
+
+    renderGame();renderManageTeams();refreshCaptainSelection();
+    showToast("✓ Modifications enregistrées. Les joueurs peuvent toujours être déplacés sans créer un nouveau tournoi.");
   }
 
   function openManageTeams() {
@@ -1973,24 +2001,88 @@ function renderTeamForm(draft = null) {
 
   function renderAdminDashboard() {
     if (!els.dashboardTournamentInfo) return;
+
     if (!state) {
-      els.dashboardTournamentInfo.innerHTML =
-        `<div class="card-mini"><strong>Aucun tournoi en cours.</strong><p class="muted small">Tu peux ouvrir les inscriptions ou créer un nouveau tournoi.</p></div>`;
+      els.dashboardTournamentInfo.innerHTML = `
+        <div class="dashboard-empty">
+          <div class="dashboard-empty-icon">⚽</div>
+          <strong>Aucun tournoi en cours</strong>
+          <p>Ouvre les inscriptions ou crée un nouveau tournoi.</p>
+        </div>`;
       return;
     }
 
     if (state.phase === "complete" || state.tournamentWinnerId !== null) {
-      els.dashboardTournamentInfo.innerHTML =
-        `<div class="card-mini"><strong>🏁 Tournoi terminé</strong><p class="muted small">Le tournoi est terminé. Ouvre <strong>Tournoi</strong> pour voir la finale, le résultat et le classement final.</p></div>`;
+      const winner = state.teams[state.tournamentWinnerId];
+      const final = state.finalResult;
+      const finalText = final
+        ? `${state.teams[final.winnerId]?.name || "—"} ${final.scoreA} - ${final.scoreB} ${state.teams[final.loserId]?.name || "—"}`
+        : "Finale terminée";
+      els.dashboardTournamentInfo.innerHTML = `
+        <div class="dashboard-live-summary dashboard-finished">
+          <div class="dashboard-summary-top">
+            <span class="live-pill">🏆 TOURNOI TERMINÉ</span>
+            <span class="muted small">Résultats finaux</span>
+          </div>
+          <div class="dashboard-champion">
+            ${teamJerseyHtml(winner,state.tournamentWinnerId,"dashboard-champion-jersey")}
+            <div>
+              <div class="muted small">CHAMPION</div>
+              <h3 style="color:${getTeamColor(winner,state.tournamentWinnerId)}">${escapeHtml(winner?.name || "—")}</h3>
+            </div>
+          </div>
+          <div class="dashboard-final-score"><span>🏆 Finale</span><strong>${escapeHtml(finalText)}</strong></div>
+          <button class="secondary full" id="dashboardOpenTournamentBtn">🏟️ Voir le tournoi et le classement final</button>
+        </div>`;
+      document.getElementById("dashboardOpenTournamentBtn")?.addEventListener("click", showGame);
       return;
     }
 
-    const a=state.active?state.teams[state.active.a]?.name:"",b=state.active?state.teams[state.active.b]?.name:"";
-    els.dashboardTournamentInfo.innerHTML=
-      `<div class="card-mini"><strong>🏟️ Tournoi actuel</strong><p class="muted small">${
-        state.active ? `Match #${state.matchNumber} — ${escapeHtml(a||"—")} vs ${escapeHtml(b||"—")}` :
-        "Tournoi préparé"
-      }</p></div>`;
+    const teams = Array.isArray(state.teams) ? state.teams : [];
+    const active = state.active;
+    const a = active ? teams[active.a] : null;
+    const b = active ? teams[active.b] : null;
+    const totalPlayers = teams.reduce((n,t)=>n+(Array.isArray(t.players)?t.players.length:0),0);
+    const top = sortedTeams()[0];
+
+    els.dashboardTournamentInfo.innerHTML = `
+      <div class="dashboard-live-summary">
+        <div class="dashboard-summary-top">
+          <div>
+            <span class="live-pill">${state.matchStarted ? "● EN DIRECT" : "⏸ MATCH PRÉPARÉ"}</span>
+            <h3>Tournoi actuel</h3>
+            <p class="muted small">${state.matchStarted ? `Match #${state.matchNumber} en cours` : `Match #${state.matchNumber || 1} prêt à démarrer`}</p>
+          </div>
+          <div class="dashboard-mini-stat"><strong>${formatTime(state.secondsLeft)}</strong><span>chrono</span></div>
+        </div>
+
+        ${active ? `<div class="dashboard-match-preview">
+          <div class="dashboard-match-team">
+            ${teamJerseyHtml(a,active.a,"dashboard-match-jersey")}
+            <strong style="color:${getTeamColor(a,active.a)}">${escapeHtml(a?.name||"—")}</strong>
+          </div>
+          <div class="dashboard-match-score"><strong>${state.scoreA}</strong><span>VS</span><strong>${state.scoreB}</strong></div>
+          <div class="dashboard-match-team">
+            ${teamJerseyHtml(b,active.b,"dashboard-match-jersey")}
+            <strong style="color:${getTeamColor(b,active.b)}">${escapeHtml(b?.name||"—")}</strong>
+          </div>
+        </div>` : `<div class="dashboard-no-match">Le tournoi est prêt. Prépare le premier match.</div>`}
+
+        <div class="dashboard-stat-grid">
+          <div><strong>${teams.length}</strong><span>équipes</span></div>
+          <div><strong>${totalPlayers}</strong><span>joueurs</span></div>
+          <div><strong>${state.history?.length || 0}</strong><span>matchs finis</span></div>
+          <div><strong>${top ? escapeHtml(top.name) : "—"}</strong><span>leader</span></div>
+        </div>
+
+        <div class="dashboard-team-strip">
+          ${teams.map((t,i)=>`<div class="dashboard-team-mini" style="--team-color:${getTeamColor(t,i)}">
+            ${teamJerseyHtml(t,i,"dashboard-team-jersey")}
+            <span>${escapeHtml(t.name)}</span>
+            <small>${Array.isArray(t.players)?t.players.length:0} joueurs</small>
+          </div>`).join("")}
+        </div>
+      </div>`;
   }
 
   function showDashboard() {
@@ -2029,9 +2121,10 @@ function renderTeamForm(draft = null) {
 
 
   function teamImageHtml(team, cls="team-logo") {
+    const index = state?.teams ? state.teams.indexOf(team) : 0;
     return team?.image
       ? `<img class="${cls}" src="${escapeHtml(team.image)}" alt="Image de ${escapeHtml(team.name)}">`
-      : `<div class="${cls} placeholder">⚽</div>`;
+      : teamJerseyHtml(team, Math.max(0,index), cls);
   }
 
   function phaseDurationSeconds() {

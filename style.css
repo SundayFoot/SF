@@ -510,3 +510,454 @@ input, select { width:100%; margin-top:7px; padding:13px; border-radius:13px; bo
 .registration-name-empty{padding:10px 12px;color:#94a3b8;font-size:13px;border:1px dashed #334155;border-radius:10px}
 .registration-selected-name{margin:5px 0 0;padding:8px 10px;color:#86efac;background:#052e1b;border:1px solid #166534;border-radius:9px;font-size:12px;font-weight:700}
 .admin-final-result{text-align:center}.admin-final-result .winner-logo{margin:12px auto 0}.admin-final-result .final-result-teams{margin:14px 0}
+
+
+/* =========================================================
+   V7 — SUNDAY FOOTBALL MODERN UI
+   Assets live in /assets. No external image dependency.
+   ========================================================= */
+:root{
+  --bg:#050b16;
+  --bg-soft:#08111f;
+  --card:#0d1728;
+  --card2:#111f34;
+  --card3:#162640;
+  --text:#f8fbff;
+  --muted:#9aaac0;
+  --border:#263a55;
+  --accent:#4ea1ff;
+  --accent2:#7c5cff;
+  --good:#21d07a;
+  --warn:#f5bd24;
+  --danger:#ff5263;
+  --radius:22px;
+}
+html{scroll-behavior:smooth}
+body{
+  background:
+    radial-gradient(circle at 8% 0%,rgba(43,117,214,.16),transparent 28%),
+    radial-gradient(circle at 92% 8%,rgba(124,92,255,.11),transparent 25%),
+    linear-gradient(180deg,#050b16 0%,#07101e 55%,#050a14 100%);
+  color:var(--text);
+  letter-spacing:.01em;
+}
+body:before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.28;
+  background-image:radial-gradient(rgba(255,255,255,.11) 1px,transparent 1px);
+  background-size:32px 32px;mask-image:linear-gradient(to bottom,black,transparent 70%);
+}
+.app{width:min(100% - 32px,1040px);padding:24px 0 56px}
+.topbar{
+  position:sticky;top:10px;z-index:20;
+  padding:12px 14px;border:1px solid rgba(91,119,154,.35);
+  border-radius:20px;
+  background:rgba(7,16,30,.82);backdrop-filter:blur(18px);
+  box-shadow:0 12px 35px rgba(0,0,0,.25);
+}
+.brand-block{display:flex;align-items:center;gap:10px}
+.brand-mark{width:38px;height:38px;filter:drop-shadow(0 4px 12px rgba(78,161,255,.25))}
+.topbar h1{font-size:20px;letter-spacing:-.03em}
+.topbar-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.topbar-actions button{min-height:42px;border-radius:13px}
+.card{
+  background:linear-gradient(145deg,rgba(15,27,47,.96),rgba(9,19,34,.96));
+  border:1px solid rgba(76,103,139,.4);
+  border-radius:var(--radius);
+  padding:20px;
+  margin-bottom:16px;
+  box-shadow:0 18px 55px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.025);
+}
+.card h2{font-size:23px;letter-spacing:-.035em}
+.primary{
+  background:linear-gradient(135deg,#67b0ff,#4c8ff5);
+  color:#04101f;box-shadow:0 9px 22px rgba(78,161,255,.22);
+}
+.secondary{
+  background:linear-gradient(145deg,#14243b,#0f1b2d);
+  color:#eef6ff;border-color:#2b405e;
+}
+button{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease,background .16s ease}
+button:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(0,0,0,.18)}
+button:active{transform:translateY(0) scale(.985)}
+input,select{
+  background:#0b1729!important;color:#f7fbff!important;border:1px solid #30445f!important;
+  border-radius:14px;min-height:48px;
+}
+input::placeholder{color:#71839c}
+label{color:#aebbd0}
+.access-card{
+  position:relative;overflow:hidden;
+  min-height:610px;
+  display:flex;flex-direction:column;justify-content:center;
+  background:
+    linear-gradient(90deg,rgba(3,9,18,.96) 0%,rgba(3,10,19,.76) 46%,rgba(3,10,19,.35) 100%),
+    url("assets/hero-football.svg") center/cover no-repeat,
+    #091525;
+}
+.access-card:after{
+  content:"";position:absolute;inset:auto -20% -35% 25%;height:260px;
+  background:radial-gradient(circle,rgba(78,161,255,.25),transparent 68%);
+  pointer-events:none;
+}
+.access-brand{display:flex;align-items:center;gap:14px;position:relative;z-index:1}
+.access-brand img{width:58px;height:58px}
+.access-brand h1{font-size:clamp(34px,6vw,54px);line-height:.98;margin:0;letter-spacing:-.055em}
+.hero-kicker{
+  position:relative;z-index:1;margin:18px 0 5px;
+  color:#7ec0ff;font-size:12px;font-weight:900;letter-spacing:.14em;
+}
+.access-subtitle{position:relative;z-index:1;font-size:15px;max-width:520px}
+.access-grid{position:relative;z-index:2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;max-width:570px;margin-top:24px}
+.access-grid button{min-height:56px;text-align:left;padding-left:18px}
+.access-grid .primary{grid-column:1/-1;font-size:16px}
+.login-box{position:relative;z-index:2;max-width:570px;margin-top:16px;padding:16px;border-radius:18px;background:rgba(5,13,25,.78);border:1px solid #30445f;backdrop-filter:blur(12px)}
+.dashboard-card{overflow:hidden}
+.dashboard-hero{
+  position:relative;min-height:190px;border-radius:18px;overflow:hidden;margin:12px 0 16px;
+  background:
+    linear-gradient(90deg,rgba(5,13,24,.95),rgba(5,13,24,.65),rgba(5,13,24,.18)),
+    url("assets/hero-football.svg") center/cover;
+  border:1px solid #29415f;
+}
+.dashboard-hero-copy{position:relative;z-index:1;max-width:520px;padding:26px}
+.dashboard-hero h3{font-size:30px;line-height:1.05;margin:12px 0 7px;letter-spacing:-.045em}
+.dashboard-hero p{margin:0;color:#b6c4d7}
+.live-pill{
+  display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;
+  background:rgba(16,185,129,.14);border:1px solid rgba(52,211,153,.35);
+  color:#72f0b2;font-size:11px;font-weight:900;letter-spacing:.06em;
+}
+.dashboard-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}
+.dashboard-actions button{min-height:58px}
+.dashboard-info{margin-top:16px}
+.setup-card{padding:0;overflow:hidden}
+.setup-visual{position:relative;min-height:180px;display:flex;align-items:flex-end;overflow:hidden}
+.setup-visual img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.55}
+.setup-visual:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 10%,#0d1728 100%)}
+.setup-visual>div{position:relative;z-index:1;padding:24px}
+.setup-card>p,.setup-card>.grid,.setup-card>.team-form,.setup-card>button,.setup-card>.hint{margin-left:20px;margin-right:20px}
+.setup-card>p:first-of-type{margin-top:18px}
+.section-title{font-size:15px}
+.queue-item,.rank-item,.history-item{
+  background:linear-gradient(145deg,#101d31,#0c1728);
+  border-color:#273c57;border-radius:14px;padding:12px 14px;
+}
+.match-card{
+  background:
+    linear-gradient(180deg,rgba(7,16,29,.5),rgba(7,16,29,.96)),
+    url("assets/hero-football.svg") center/cover;
+  border:1px solid #345578;
+}
+.match-card .score{font-size:76px;text-shadow:0 8px 28px rgba(0,0,0,.35)}
+.team-name{font-size:clamp(21px,4vw,30px)}
+.registration-name-results{background:rgba(5,12,22,.5);padding:4px;border-radius:14px}
+.registration-name-option{background:#102038;border-color:#2d4563!important}
+.registration-name-option:hover,.registration-name-option.selected{background:#16406c!important}
+.registration-help-message,.registration-feedback{
+  border-radius:15px!important;background:rgba(20,35,57,.72)!important;border:1px solid #304866!important;
+}
+.manage-team-card,.manage-player-row{box-shadow:0 8px 22px rgba(0,0,0,.12)}
+.manage-team-card{background:linear-gradient(145deg,#0f1c30,#0b1525)!important;border-radius:18px!important}
+.manage-player-row{background:#101d31!important;border-color:#2a405d!important}
+.final-dashboard{
+  background:
+    radial-gradient(circle at 50% 0%,rgba(245,189,36,.12),transparent 35%),
+    linear-gradient(145deg,#101c30,#091321);
+  border-color:#806520!important;
+}
+.final-dashboard .trophy{
+  width:92px;height:92px;margin:0 auto 10px;padding:18px;border-radius:50%;
+  background:rgba(245,189,36,.08);
+  background-image:url("assets/trophy.svg");background-size:70%;background-position:center;background-repeat:no-repeat;
+  font-size:0;
+}
+.final-result-score{font-size:40px;font-weight:950;letter-spacing:-.05em}
+@media(max-width:700px){
+  .app{width:min(100% - 16px,1040px);padding-top:10px}
+  .topbar{position:relative;top:auto;align-items:flex-start}
+  .topbar-actions{width:100%;justify-content:flex-start}
+  .topbar-actions button{flex:1 1 auto}
+  .access-card{min-height:650px;padding:18px}
+  .access-grid{grid-template-columns:1fr}
+  .access-grid .primary{grid-column:auto}
+  .dashboard-actions{grid-template-columns:1fr}
+  .dashboard-hero{min-height:235px}
+  .dashboard-hero-copy{padding:22px}
+  .dashboard-hero h3{font-size:26px}
+}
+@media(max-width:420px){
+  .card{padding:14px;border-radius:18px}
+  .access-brand h1{font-size:35px}
+  .access-brand img{width:48px;height:48px}
+  .hero-kicker{font-size:10px}
+  .topbar{padding:10px}
+  .topbar-actions button{font-size:12px;padding:9px 10px}
+}
+
+
+/* =========================================================
+   V7.1 — Mobile app pages / jerseys / live / admin
+   ========================================================= */
+.live-card{
+  background:
+    radial-gradient(circle at 50% -10%,rgba(78,161,255,.14),transparent 35%),
+    linear-gradient(145deg,#0d192c,#081321);
+  border-color:#2d496a;
+  overflow:hidden;
+}
+.live-card .section-title{font-size:16px}
+.live-status{
+  display:inline-flex;padding:7px 11px;border-radius:999px;
+  background:rgba(78,161,255,.13);border:1px solid rgba(78,161,255,.32);
+  color:#8dc7ff;font-size:11px;font-weight:900;letter-spacing:.08em;
+}
+.live-score{gap:10px;margin:16px 0 8px}
+.live-team{min-width:150px;position:relative}
+.live-team strong{display:block;font-size:clamp(20px,4vw,32px);margin-top:4px}
+.live-team .score{font-size:clamp(55px,9vw,82px);margin:4px 0}
+.live-vs{
+  width:42px;height:42px;border-radius:50%;display:grid;place-items:center;
+  background:#14243a;border:1px solid #355170;color:#9fb2c9;font-weight:900;font-size:11px;
+}
+.live-jersey{height:104px;display:flex;justify-content:center;align-items:center}
+.live-jersey .team-jersey{width:82px;height:94px;object-fit:contain;filter:drop-shadow(0 12px 15px rgba(0,0,0,.32))}
+.live-time{
+  font-size:clamp(34px,7vw,56px);font-weight:950;letter-spacing:-.055em;
+  padding:4px 18px;margin:8px auto;width:max-content;
+  border-radius:14px;background:#07111f;border:1px solid #263d5b;
+}
+.live-scorers{color:#aab9cb!important}
+.public-teams-board{
+  display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;
+  overflow:visible!important;padding:2px!important;
+}
+.public-team-card{
+  position:relative;min-height:340px;flex:none!important;width:auto!important;
+  background:linear-gradient(145deg,#0e1c30,#091422)!important;
+  border:1px solid #2c425e!important;border-top:4px solid var(--team-color)!important;
+  border-radius:20px!important;overflow:hidden!important;scroll-snap-align:none!important;
+}
+.public-team-card:after{
+  content:"";position:absolute;right:-50px;top:50px;width:160px;height:160px;border-radius:50%;
+  background:var(--team-color);opacity:.07;filter:blur(3px)
+}
+.public-team-header{position:relative;z-index:2;padding:15px 15px 0}
+.public-team-header h3{font-size:22px;margin:4px 0}
+.public-team-jersey{
+  height:130px;display:grid;place-items:center;position:relative;z-index:1;
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.14));
+}
+.public-team-jersey .team-jersey{height:124px;width:120px;object-fit:contain;filter:drop-shadow(0 14px 16px rgba(0,0,0,.32))}
+.public-team-players{position:relative;z-index:2;padding:4px 12px 14px}
+.public-player-row{
+  display:flex!important;align-items:center;gap:10px!important;padding:9px 10px!important;
+  margin:5px 0!important;background:#101e32!important;border:1px solid #273c57!important;border-radius:12px!important;
+}
+.public-player-number{
+  width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  background:var(--team-color);color:#fff;font-size:11px;font-weight:900
+}
+.pre-match{
+  background:
+    radial-gradient(circle at 50% 0%,rgba(78,161,255,.12),transparent 42%),
+    linear-gradient(145deg,#101e33,#091421)!important;
+}
+.pre-match-teams{
+  grid-template-columns:1fr 60px 1fr!important;align-items:center!important;
+}
+.pre-match-teams strong{
+  display:flex;flex-direction:column;align-items:center;gap:7px;
+}
+.pre-team-jersey{width:95px;height:105px;object-fit:contain;filter:drop-shadow(0 12px 14px rgba(0,0,0,.3))}
+.pre-match-teams span{font-size:22px!important;font-weight:950;color:#8194ad!important}
+.manage-team-card{
+  position:relative;background:linear-gradient(145deg,#0e1b2e,#0a1424)!important;
+  border:1px solid #2b425f!important;border-left:4px solid var(--team-color)!important;
+  border-radius:18px!important;padding:14px!important;
+}
+.manage-team-head{align-items:center!important}
+.manage-team-title{align-items:center!important}
+.manage-team-jersey{width:48px;height:54px;object-fit:contain;filter:drop-shadow(0 5px 7px rgba(0,0,0,.3))}
+.manage-player-row{background:#0e1a2d!important;border-color:#2b405c!important;border-radius:13px!important}
+.manage-player-input,.manage-player-team-select{background:#0b1729!important;color:#f8fbff!important;border-color:#2e4663!important}
+.captains-panel{
+  background:
+    radial-gradient(circle at 100% 0%,rgba(124,92,255,.12),transparent 35%),
+    linear-gradient(145deg,#101e33,#0a1525)!important;
+  border-color:#304764!important;
+}
+.captain-select-wrap{background:#0d1a2d;padding:10px;border:1px solid #29415e;border-radius:14px}
+.manage-actions{position:sticky;bottom:10px;z-index:8;padding:10px;border-radius:18px;background:rgba(5,12,22,.84);backdrop-filter:blur(16px);border:1px solid #30445e}
+.registration-admin-page-card{
+  background:linear-gradient(145deg,#0e1b2f,#091423)!important;border-color:#2c435f!important
+}
+.registration-admin-card,.allowed-list-admin,.registration-pending-box,.registration-plan-box{
+  background:linear-gradient(145deg,#101f34,#0b1729)!important;border-color:#2b425f!important
+}
+.registration-admin-row,.allowed-player-row,.pending-registration-row{
+  background:#0e1b2e!important;border-color:#2a405c!important;border-radius:14px!important
+}
+.registration-admin-page .card,.registration-screen .card{box-shadow:0 15px 45px rgba(0,0,0,.18)}
+.final-dashboard{
+  position:relative;overflow:hidden;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(245,189,36,.15),transparent 42%),
+    linear-gradient(145deg,#101d31,#081320)!important;
+}
+.final-dashboard:before{
+  content:"";position:absolute;inset:0;background:url("assets/trophy.svg") 50% 8px/170px no-repeat;opacity:.10;pointer-events:none
+}
+.final-dashboard>*{position:relative;z-index:1}
+.final-dashboard .trophy{
+  width:110px;height:110px;margin:0 auto 8px;
+  background:rgba(245,189,36,.07)!important;background-image:url("assets/trophy.svg")!important;
+  background-size:78%!important;background-position:center!important;background-repeat:no-repeat!important;
+  border:1px solid rgba(245,189,36,.24);font-size:0
+}
+.final-result-card{
+  background:linear-gradient(145deg,#111f34,#0a1424)!important
+}
+.admin-final-result .final-result-score,.final-result-score{
+  font-size:clamp(32px,7vw,52px)!important;font-weight:950!important;color:#f7fbff
+}
+.card-mini{
+  background:linear-gradient(145deg,#101e33,#0b1729)!important;
+  border-color:#2a405e!important;border-radius:16px!important
+}
+#gameScreen>.stats-grid .stat{
+  background:linear-gradient(145deg,#101e33,#0a1525)!important;border-color:#2b425f!important
+}
+#gameScreen .match-card{
+  border:1px solid #38587a!important;
+  background:
+    radial-gradient(circle at 50% 0%,rgba(78,161,255,.14),transparent 38%),
+    linear-gradient(145deg,#0d1a2e,#07111e)!important
+}
+#gameScreen .team-side{
+  background:rgba(12,25,43,.72);border:1px solid #263e5b;border-radius:18px;padding:12px
+}
+#gameScreen .team-side .goal{
+  background:linear-gradient(135deg,#172b45,#102139);border-color:#345170;font-weight:800
+}
+#gameScreen .scorer-list{background:#091525;border:1px solid #223750;border-radius:12px;padding:9px;margin-top:8px}
+#gameScreen .timer-controls{display:flex;gap:10px;margin-top:12px}
+#gameScreen .timer-controls button{flex:1}
+#gameScreen .action-grid .win{box-shadow:0 8px 20px rgba(33,208,122,.14)}
+#gameScreen .final-screen,#gameScreen #dashboardScreen{margin-top:16px}
+@media(max-width:700px){
+  .public-teams-board{grid-template-columns:1fr!important}
+  .live-score{display:grid!important;grid-template-columns:1fr 44px 1fr!important}
+  .live-team{min-width:0!important}
+  .live-jersey{height:88px}
+  .live-jersey .team-jersey{width:68px;height:80px}
+  .pre-match-teams{grid-template-columns:1fr!important}
+  .pre-match-teams>span{display:block!important}
+  .pre-team-jersey{width:76px;height:82px}
+  #gameScreen .team-side{padding:9px}
+}
+
+
+/* =========================================================
+   V7.2 — visual parity pass: dashboard / live / classement
+   ========================================================= */
+.dashboard-live-summary{
+  margin-top:14px;padding:18px;border-radius:20px;
+  background:
+    radial-gradient(circle at 50% -20%,rgba(78,161,255,.14),transparent 38%),
+    linear-gradient(145deg,#0e1d32,#091423);
+  border:1px solid #2d4867;overflow:hidden;
+}
+.dashboard-summary-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dashboard-summary-top h3{font-size:23px;margin:9px 0 2px}
+.dashboard-mini-stat{
+  min-width:86px;padding:9px 11px;border:1px solid #2b425f;border-radius:13px;background:#091525;text-align:center
+}
+.dashboard-mini-stat strong{display:block;font-size:20px}.dashboard-mini-stat span{font-size:10px;color:#8193aa}
+.dashboard-match-preview{
+  display:grid;grid-template-columns:1fr 100px 1fr;align-items:center;gap:10px;
+  margin:16px 0;padding:14px;border-radius:17px;background:#091525;border:1px solid #263e5b
+}
+.dashboard-match-team{text-align:center;display:flex;flex-direction:column;align-items:center;gap:5px}
+.dashboard-match-team strong{font-size:18px}
+.dashboard-match-jersey{width:72px;height:78px;object-fit:contain;filter:drop-shadow(0 9px 12px rgba(0,0,0,.32))}
+.dashboard-match-score{display:flex;align-items:center;justify-content:center;gap:8px}
+.dashboard-match-score strong{font-size:38px;letter-spacing:-.05em}
+.dashboard-match-score span{font-size:10px;color:#70849e;font-weight:900}
+.dashboard-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.dashboard-stat-grid>div{padding:11px;border-radius:13px;background:#101f34;border:1px solid #293f5b;text-align:center}
+.dashboard-stat-grid strong{display:block;font-size:18px}.dashboard-stat-grid span{display:block;color:#8294aa;font-size:10px;margin-top:3px}
+.dashboard-team-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:12px}
+.dashboard-team-mini{
+  min-width:0;padding:10px 6px;border-radius:14px;background:#0c192b;border:1px solid #2a405d;
+  border-top:3px solid var(--team-color);display:flex;flex-direction:column;align-items:center;text-align:center
+}
+.dashboard-team-jersey{width:42px;height:46px;object-fit:contain;margin-bottom:3px}
+.dashboard-team-mini span{font-weight:900;font-size:12px;color:var(--team-color)}
+.dashboard-team-mini small{font-size:9px;color:#8294aa;margin-top:2px}
+.dashboard-no-match,.dashboard-empty{
+  text-align:center;padding:24px;border:1px dashed #304863;border-radius:16px;color:#95a8bf
+}
+.dashboard-empty-icon{font-size:42px;margin-bottom:7px}
+.dashboard-finished{border-color:#806a2e;background:
+  radial-gradient(circle at 50% 0,rgba(245,189,36,.15),transparent 42%),
+  linear-gradient(145deg,#121f32,#091421)}
+.dashboard-champion{display:flex;align-items:center;justify-content:center;gap:18px;padding:15px 0}
+.dashboard-champion-jersey{width:95px;height:105px;object-fit:contain;filter:drop-shadow(0 12px 15px rgba(0,0,0,.35))}
+.dashboard-champion h3{font-size:30px;margin:3px 0}
+.dashboard-final-score{
+  display:flex;justify-content:space-between;align-items:center;padding:13px 15px;margin:8px 0 12px;
+  border-radius:14px;background:#0a1728;border:1px solid #2b425f
+}
+.dashboard-final-score strong{font-size:20px}
+.admin-match-jersey{display:block;width:88px;height:96px;object-fit:contain;margin:0 auto 5px;filter:drop-shadow(0 10px 13px rgba(0,0,0,.35))}
+#gameScreen .team-name{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  min-height:120px;font-weight:950;font-size:26px
+}
+#gameScreen .team-name span:last-child{line-height:1}
+#gameScreen .team-side{
+  background:
+    linear-gradient(180deg,rgba(17,34,56,.92),rgba(8,20,35,.96))!important;
+  border:1px solid #2e4968!important;border-radius:20px!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.03),0 12px 30px rgba(0,0,0,.18)
+}
+#gameScreen .score{font-size:74px!important;font-weight:950;line-height:.95}
+#gameScreen .teams{align-items:stretch}
+#gameScreen .versus{
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900;color:#8093ab
+}
+.queue-item,.rank-item{position:relative;overflow:hidden}
+.queue-item:before,.rank-item:before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--team-color);opacity:.95
+}
+.queue-jersey{width:34px;height:38px;object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}
+.rank-jersey{width:30px;height:34px;object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,.25))}
+.rank-position{
+  width:25px;height:25px;border-radius:8px;background:#15263e;border:1px solid #2d4562;
+  display:grid;place-items:center;font-size:11px;font-weight:900;color:#a9bbcf
+}
+#rankingList .rank-item,#queueList .queue-item{
+  min-height:55px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:7px 0;padding:8px 11px 8px 14px
+}
+#rankingList .row-left,#queueList .row-left{gap:8px}
+#gameScreen .card{
+  background:linear-gradient(145deg,#0d1a2d,#091423);
+  border-color:#263e5b
+}
+#gameScreen .match-card{
+  background:
+    radial-gradient(circle at 50% 0,rgba(78,161,255,.14),transparent 30%),
+    linear-gradient(145deg,#0c1b2e,#07121f)!important
+}
+#gameScreen .scorer-list{min-height:34px;display:flex;align-items:center;justify-content:center;color:#8da1b9}
+@media(max-width:700px){
+  .dashboard-match-preview{grid-template-columns:1fr 70px 1fr}
+  .dashboard-match-jersey{width:62px;height:68px}
+  .dashboard-match-score strong{font-size:31px}
+  .dashboard-stat-grid{grid-template-columns:repeat(2,1fr)}
+  .dashboard-team-strip{grid-template-columns:repeat(2,1fr)}
+  .dashboard-summary-top h3{font-size:20px}
+  #gameScreen .team-name{min-height:105px;font-size:21px}
+  .admin-match-jersey{width:68px;height:75px}
+  #gameScreen .score{font-size:61px!important}
+}
