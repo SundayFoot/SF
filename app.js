@@ -981,14 +981,22 @@ function renderTeamForm(draft = null) {
   function showAccess() {
     stopTimer();
     if (liveTimerId) { clearInterval(liveTimerId); liveTimerId = null; }
-    document.getElementById("accessScreen")?.classList.remove("hidden");
+
+    // Public/visitor screen: absolutely every admin page is hidden.
+    // This is also called after logout and on expired sessions.
+    els.setupScreen?.classList.add("hidden");
+    els.gameScreen?.classList.add("hidden");
+    els.registrationAdminScreen?.classList.add("hidden");
+    els.dashboardPage?.classList.add("hidden");
+    els.manageTeamsPanel?.classList.add("hidden");
     els.appTopbar?.classList.add("hidden");
-    els.setupScreen.classList.add("hidden");
-    els.gameScreen.classList.add("hidden");
     document.getElementById("liveScreen")?.classList.add("hidden");
     document.getElementById("registrationScreen")?.classList.add("hidden");
-    els.registrationAdminScreen?.classList.add("hidden");
     document.getElementById("adminLoginBox")?.classList.add("hidden");
+
+    // Reset the mode before exposing the public access screen.
+    if (accessMode !== "admin") accessMode = "none";
+    document.getElementById("accessScreen")?.classList.remove("hidden");
   }
 
   function renderLive() {
