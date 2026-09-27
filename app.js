@@ -1310,10 +1310,23 @@ function renderTeamForm(draft = null) {
       return;
     }
 
-    const ranking = sortedTeams().map((t,i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(t.name)}</strong><span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span></div>`).join("");
-    const scorers = getScorerRanking().map(([name,goals],i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(name)}</strong><span class="badges">${goals} but${goals>1?"s":""}</span></div>`).join("");
-    const queue = (state.queue||[]).map((id,i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(team(id)?.name||"—")}</strong></div>`).join("");
-    root.innerHTML = matchHtml + `<div class="grid two"><div class="card live-card"><div class="section-title">🏆 Classement</div>${ranking || `<p class="muted">Aucun classement.</p>`}</div><div class="card live-card"><div class="section-title">⚽ Buteurs</div>${scorers || `<p class="muted">Aucun buteur.</p>`}</div></div><div class="card live-card"><div class="section-title">📋 Prochaines équipes</div><div class="live-list">${queue || `<p class="muted">Aucune équipe en attente.</p>`}</div></div><div class="card live-card"><div class="section-title">📜 Matchs terminés</div>${(state.history||[]).slice().reverse().map(h=>`<div class="history-item"><strong>#${h.number}</strong><span>${escapeHtml(h.text)}</span></div>`).join("") || `<p class="muted">Aucun match terminé.</p>`}</div>`;
+    const ranking = sortedTeams().map((t,i)=>`<div class="rank-item public-rank-item" style="--team-color:${getTeamColor(t,i)}"><div class="row-left"><span class="rank-position">${i+1}</span>${teamJerseyHtml(t,i,"public-rank-jersey")}<strong style="color:${getTeamColor(t,i)}">${escapeHtml(t.name)}</strong></div><span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span></div>`).join("");
+    const scorers = getScorerRanking().map(([name,goals],i)=>`<div class="rank-item public-scorer-item"><div class="row-left"><span class="rank-position">${i+1}</span><span>⚽</span><strong>${escapeHtml(name)}</strong></div><span class="badges">${goals} but${goals>1?"s":""}</span></div>`).join("");
+    const queue = (state.queue||[]).map((id,i)=>`<div class="rank-item public-rank-item" style="--team-color:${getTeamColor(team(id),id)}"><div class="row-left"><span class="rank-position">${i+1}</span>${teamJerseyHtml(team(id),id,"public-rank-jersey")}<strong style="color:${getTeamColor(team(id),id)}">${escapeHtml(team(id)?.name||"—")}</strong></div><span class="badges">À venir</span></div>`).join("");
+    const teamCards = state.teams.map((t,i)=>`<div class="public-dashboard-team" style="--team-color:${getTeamColor(t,i)}">${teamJerseyHtml(t,i,"public-dashboard-jersey")}<strong>${escapeHtml(t.name)}</strong><span>${Array.isArray(t.players)?t.players.length:0} joueurs</span></div>`).join("");
+    const currentMatchMarkup = matchHtml;
+    root.innerHTML = `
+      <div class="public-live-hero">
+        <div class="public-live-hero-top"><div><span class="live-status live-now-pill">● EN DIRECT</span><h2>Sunday Football</h2><p>Suivez le tournoi en temps réel</p></div><div class="public-hero-ball">⚽</div></div>
+        ${currentMatchMarkup}
+      </div>
+      <div class="public-dashboard-team-strip">${teamCards}</div>
+      <div class="grid two public-dashboard-grid">
+        <div class="card live-card public-dashboard-card"><div class="section-title">🏆 Classement</div>${ranking || `<p class="muted">Aucun classement.</p>`}</div>
+        <div class="card live-card public-dashboard-card"><div class="section-title">⚽ Meilleurs buteurs</div>${scorers || `<p class="muted">Aucun buteur.</p>`}</div>
+      </div>
+      <div class="card live-card public-dashboard-card"><div class="section-title">📋 Prochaines équipes</div><div class="live-list">${queue || `<p class="muted">Aucune équipe en attente.</p>`}</div></div>
+      <div class="card live-card public-dashboard-card"><div class="section-title">📜 Matchs terminés</div>${(state.history||[]).slice().reverse().map(h=>`<div class="history-item"><strong>#${h.number}</strong><span>${escapeHtml(h.text)}</span></div>`).join("") || `<p class="muted">Aucun match terminé.</p>`}</div>`;
     if (liveTimerId) clearInterval(liveTimerId);
     if (state.phase !== "complete" && state.tournamentWinnerId === null && state.active?.matchStarted) {
       let remaining = Number(state.secondsLeft)||0;
@@ -2304,6 +2317,30 @@ function renderTeamForm(draft = null) {
     </div>`;
   }
 
+  function closeTournament() {
+    if (accessMode !== "admin") {
+      showToast("🔒 Action réservée à l’administrateur.");
+      return;
+    }
+    if (!state?.finalResult) {
+      showToast("La finale doit être terminée avant de clôturer le tournoi.");
+      return;
+    }
+    const winner = state.teams[state.finalResult.winnerId];
+    state.tournamentWinnerId = state.finalResult.winnerId;
+    state.phase = "complete";
+    state.phaseMatch = null;
+    state.phaseMatchStarted = false;
+    state.phaseSecondsLeft = 0;
+    stopPhaseTimer();
+    stopTimer();
+    saveState();
+    renderGame();
+    renderFinals();
+    renderAdminDashboard();
+    showToast(`🏆 Tournoi clôturé — ${winner?.name || "champion"} est champion.`);
+  }
+
   function renderFinals() {
     if (!state || state.teams.length < 4) {
       els.finalScreen?.classList.add("hidden");
@@ -2343,12 +2380,17 @@ function renderTeamForm(draft = null) {
         </div>
         <div class="final-admin-winner">🏆 Champion : <strong style="color:${getTeamColor(w,f.winnerId)}">${escapeHtml(w?.name||"—")}</strong></div>
         ${teamImageHtml(w,"winner-logo")}
+        <button id="closeTournamentBtn" class="primary full">🏁 Clôturer le tournoi</button>
       </div>`;
     }
 
     els.finalContent.innerHTML=html;
     const go=document.getElementById("goSemifinalsBtn");
     if(go) go.addEventListener("click",launchSemifinals);
+    const closeTournamentBtn=document.getElementById("closeTournamentBtn");
+    if(closeTournamentBtn) closeTournamentBtn.addEventListener("click",()=>{
+      if(confirm("Clôturer définitivement le tournoi et afficher uniquement les résultats finaux ?")) closeTournament();
+    });
     const startBtn=document.getElementById("startPhaseMatchBtn");
     if(startBtn) startBtn.addEventListener("click",startPhaseMatch);
     els.finalContent.querySelectorAll("[data-pgoal]").forEach(b=>b.addEventListener("click",()=>addPhaseGoal(b.dataset.pgoal)));
