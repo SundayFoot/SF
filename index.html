@@ -26,6 +26,7 @@
           <button id="liveAccessBtn" class="secondary full">👀 Live match</button>
           <button id="publicTeamsAccessBtn" class="secondary full">👥 Voir les équipes</button>
           <button id="registerAccessBtn" class="secondary full">📝 S'inscrire pour dimanche</button>
+          <button id="installAppAccessBtn" data-install-app class="secondary full">📱 Ajouter à l'écran d'accueil</button>
         </div>
         <div id="adminLoginBox" class="hidden login-box">
           <label>Code administrateur
@@ -101,6 +102,14 @@
       </div>
     </header>
 
+    <nav id="mobileBottomNav" class="mobile-bottom-nav hidden" aria-label="Navigation mobile">
+      <button type="button" data-mobile-target="homeDashboardBtn"><span class="mobile-nav-icon">🏠</span><span>Accueil</span></button>
+      <button type="button" data-mobile-target="topRegistrationBtn"><span class="mobile-nav-icon">📝</span><span>Inscriptions</span></button>
+      <button type="button" data-mobile-target="manageTeamsBtn"><span class="mobile-nav-icon">👥</span><span>Équipes</span></button>
+      <button type="button" data-mobile-target="newTournamentBtn"><span class="mobile-nav-icon">⚽</span><span>Nouveau</span></button>
+      <button type="button" data-install-app><span class="mobile-nav-icon">📱</span><span>Installer</span></button>
+    </nav>
+
     <section id="dashboardPage" class="screen hidden">
       <div class="card dashboard-card">
         <div class="topbar-inline">
@@ -145,6 +154,8 @@
               <option value="2">2</option>
               <option value="3">3</option>
               <option value="4" selected>4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
             </select>
           </label>
           <label>

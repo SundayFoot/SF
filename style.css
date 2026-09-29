@@ -1147,3 +1147,36 @@ label{color:#aebbd0}
   .priority-city-add{grid-template-columns:1fr}
   .allowed-admin-edit-grid{grid-template-columns:1fr}
 }
+
+/* V7.7 — clean whitelist rows + mobile app navigation */
+.allowed-person-display{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
+.allowed-person-display strong{font-size:15px}
+.mobile-bottom-nav{display:none}
+
+@media (max-width:700px){
+  body{padding-bottom:78px}
+  .app{width:100%;padding:10px 8px 90px}
+  .topbar{margin-bottom:10px}
+  .topbar-actions{display:none!important}
+  .mobile-bottom-nav{
+    position:fixed;left:8px;right:8px;bottom:8px;z-index:100;
+    display:grid;grid-template-columns:repeat(5,1fr);gap:5px;
+    padding:7px 5px;border:1px solid #30445e;border-radius:18px;
+    background:rgba(5,12,22,.94);backdrop-filter:blur(18px);
+    box-shadow:0 12px 35px rgba(0,0,0,.45);
+  }
+  .mobile-bottom-nav button{
+    min-height:56px;padding:5px 2px;border:0;background:transparent;color:#b9c5d6;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    border-radius:12px;font-size:10px;font-weight:700;
+  }
+  .mobile-bottom-nav button:active{background:#16263d}
+  .mobile-nav-icon{font-size:21px;line-height:1}
+  .card{border-radius:16px;padding:12px}
+  .registration-admin-page-card{padding:9px}
+  .registration-admin-row.allowed-row{align-items:stretch}
+  .allowed-person-display{padding-right:4px}
+  .registration-row-actions{width:100%;display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+  .registration-row-actions button{width:100%;min-width:0;font-size:11px;padding:7px 4px}
+  .allowed-row .danger-small{height:auto;min-height:38px}
+}

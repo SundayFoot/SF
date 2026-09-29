@@ -225,7 +225,7 @@ function resumeMatchTimer() {
 }
 
 function renderTeamForm(draft = null) {
-    const count = Math.max(2, Math.min(4, Number(els.teamCount.value) || 4));
+    const count = Math.max(2, Math.min(6, Number(els.teamCount.value) || 4));
     els.teamCount.value = String(count);
     const previous = draft || getSetupDraft();
     els.teamForm.innerHTML = "";
@@ -322,8 +322,8 @@ function renderTeamForm(draft = null) {
 
   function addSetupTeam() {
     if (accessMode !== "admin") { showToast("🔒 Action réservée à l’administrateur."); return; }
-    if (Number(els.teamCount.value) >= 4) {
-      showToast("Maximum 4 équipes.");
+    if (Number(els.teamCount.value) >= 6) {
+      showToast("Maximum 6 équipes.");
       return;
     }
     const draft = getSetupDraft();
@@ -643,7 +643,7 @@ function renderTeamForm(draft = null) {
     const rejected = rows.filter(r => (r.status || "pending") === "rejected");
     const priority = approved.filter(r => !!r.priority);
     const autoPlan = registrationTeamPlan(approved.length);
-    const defaultTeams = autoPlan.valid ? autoPlan.teamCount : (approved.length >= 10 ? Math.min(4, Math.floor(approved.length / 5)) : 2);
+    const defaultTeams = autoPlan.valid ? autoPlan.teamCount : (approved.length >= 10 ? Math.min(6, Math.floor(approved.length / 5)) : 2);
     const defaultPlayers = autoPlan.valid ? Math.min(7, Math.max(5, Math.floor(approved.length / Math.max(1, autoPlan.teamCount)))) : 5;
 
     els.registrationAdminContent.innerHTML = `
@@ -674,14 +674,13 @@ function renderTeamForm(draft = null) {
             ${allowedPlayers.length ? allowedPlayers.map(p => `
               <div class="registration-admin-row allowed-row">
                 <div class="allowed-admin-main">
-                  <div class="allowed-admin-edit-grid">
-                    <input class="allowed-edit-name" data-edit-allowed-name="${escapeHtml(p.id)}" value="${escapeHtml(p.name)}" maxlength="60">
-                    <input class="allowed-edit-city" data-edit-allowed-city="${escapeHtml(p.id)}" value="${escapeHtml(p.city||"")}" maxlength="60" placeholder="Ville">
+                  <div class="allowed-person-display">
+                    <strong>${escapeHtml(p.name)}</strong>${p.city ? `<span class="registration-city-label">📍 ${escapeHtml(p.city)}</span>` : ''}
                   </div>
                   ${p.priority ? '<span class="priority-badge">⭐ PRIORITAIRE</span>' : ''}
                 </div>
                 <div class="registration-row-actions">
-                  <button type="button" class="primary small-btn" data-save-allowed-person="${escapeHtml(p.id)}">💾 Enregistrer</button>
+                  <button type="button" class="secondary small-btn" data-edit-allowed-person="${escapeHtml(p.id)}" data-person-name="${escapeHtml(p.name)}" data-person-city="${escapeHtml(p.city||'')}">✏️ Modifier</button>
                   <button type="button" class="secondary small-btn" data-toggle-allowed-priority="${escapeHtml(p.id)}">${p.priority ? '☆ Retirer priorité' : '⭐ Prioritaire'}</button>
                   <button type="button" class="danger-small" data-delete-allowed="${escapeHtml(p.id)}">🗑️ Supprimer</button>
                 </div>
@@ -701,7 +700,7 @@ function renderTeamForm(draft = null) {
         </div>
 
         <div class="registration-stats-grid">
-          <div class="registration-stat"><strong>${approved.length}/28</strong><span>joueurs approuvés</span></div>
+          <div class="registration-stat"><strong>${approved.length}/42</strong><span>joueurs approuvés</span></div>
           <div class="registration-stat pending"><strong>${pending.length}</strong><span>demandes en attente</span></div>
           <div class="registration-stat priority"><strong>${priority.length}</strong><span>prioritaires</span></div>
         </div>
@@ -725,6 +724,8 @@ function renderTeamForm(draft = null) {
                 <option value="2" ${defaultTeams===2?'selected':''}>2 équipes</option>
                 <option value="3" ${defaultTeams===3?'selected':''}>3 équipes</option>
                 <option value="4" ${defaultTeams===4?'selected':''}>4 équipes</option>
+                <option value="5" ${defaultTeams===5?'selected':''}>5 équipes</option>
+                <option value="6" ${defaultTeams===6?'selected':''}>6 équipes</option>
               </select>
             </label>
             <label>Joueurs par équipe
@@ -754,7 +755,7 @@ function renderTeamForm(draft = null) {
         </div>
 
         <div class="registration-section-block">
-          <div class="section-title">🟢 Joueurs approuvés <span class="badges">${approved.length}/28</span></div>
+          <div class="section-title">🟢 Joueurs approuvés <span class="badges">${approved.length}/42</span></div>
           <div id="approvedRegistrationList">
             ${approved.length ? approved.map((r, i) => `
               <div class="registration-admin-row approved-row ${r.priority ? "priority-row" : ""}">
@@ -834,7 +835,7 @@ function renderTeamForm(draft = null) {
 
     document.getElementById("toggleRegistrationBtn")?.addEventListener("click", async () => {
       const next = !settings.is_open;
-      if (next && approved.length >= 28) { showToast("Les 28 places approuvées sont déjà complètes."); return; }
+      if (next && approved.length >= 42) { showToast("Les 42 places approuvées sont déjà complètes."); return; }
       const ok = await writeRegistrationSettings(next);
       if (ok) { await renderRegistrationAdmin(); showToast(next ? "📝 Demandes ouvertes." : "🔒 Demandes fermées."); }
     });
@@ -856,7 +857,7 @@ function renderTeamForm(draft = null) {
       const isPriority = !!document.getElementById("adminAddRegistrationPriority")?.checked;
       const city = String(document.getElementById("adminAddRegistrationCity")?.value || "").trim();
       if (name.length < 2) { showToast("Entre un nom valide."); return; }
-      if (approved.length >= 28) { showToast("28 joueurs approuvés maximum."); return; }
+      if (approved.length >= 42) { showToast("42 joueurs approuvés maximum."); return; }
       const existingAllowed = allowedPlayers.find(p => p.active && String(p.name).trim().toLocaleLowerCase() === name.toLocaleLowerCase());
       let allowedId = existingAllowed?.id;
       if (!allowedId) {
@@ -890,23 +891,30 @@ function renderTeamForm(draft = null) {
       showToast(`✓ ${name} ajouté à la liste autorisée.`);
     });
 
-    els.registrationAdminContent.querySelectorAll("[data-save-allowed-person]").forEach(btn => btn.addEventListener("click", async () => {
-      const id=btn.dataset.saveAllowedPerson;
-      const name=String(els.registrationAdminContent.querySelector(`[data-edit-allowed-name="${id}"]`)?.value||"").trim().replace(/\s+/g," ");
-      const city=String(els.registrationAdminContent.querySelector(`[data-edit-allowed-city="${id}"]`)?.value||"").trim().replace(/\s+/g," ");
-      if(name.length<2){showToast("Entre un nom valide.");return;}
-      const cities=await readPriorityCities();
-      const existing=await readAllAllowedPlayersAdmin();
-      const current=existing.find(p=>String(p.id)===String(id));
-      const priority=!!(current?.priority || cityMatchesPriority(city,cities));
-      const {error}=await supabaseClient.from(REG_ALLOWED_TABLE).update({name,city,priority}).eq("id",id).eq("event_id",REG_ROW_ID);
-      if(error){showToast(`Erreur Supabase: ${error.message}`);return;}
-      // Keep matching registration data synchronized without removing a manual priority.
-      const regUpdate={name,city};
-      if(priority) { regUpdate.priority=true; regUpdate.status="approved"; }
-      await supabaseClient.from(REG_TABLE).update(regUpdate).eq("allowed_player_id",id).eq("event_id",REG_ROW_ID).neq("status","rejected");
+    els.registrationAdminContent.querySelectorAll("[data-edit-allowed-person]").forEach(btn => btn.addEventListener("click", async () => {
+      const id = btn.dataset.editAllowedPerson;
+      const currentName = btn.dataset.personName || "";
+      const currentCity = btn.dataset.personCity || "";
+      const name = prompt("Nom / prénom :", currentName);
+      if (name === null) return;
+      const cleanName = name.trim().replace(/\s+/g, " ");
+      if (cleanName.length < 2) { showToast("Entre un nom valide."); return; }
+      const city = prompt("Ville :", currentCity);
+      if (city === null) return;
+      const cleanCity = city.trim().replace(/\s+/g, " ");
+      const cities = await readPriorityCities();
+      const existing = await readAllAllowedPlayersAdmin();
+      const duplicate = existing.find(p => String(p.id) !== String(id) && String(p.name).trim().toLocaleLowerCase() === cleanName.toLocaleLowerCase());
+      if (duplicate) { showToast("Ce nom existe déjà dans la liste autorisée."); return; }
+      const current = existing.find(p => String(p.id) === String(id));
+      const priority = !!(current?.priority || cityMatchesPriority(cleanCity, cities));
+      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).update({ name: cleanName, city: cleanCity, priority }).eq("id", id).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      const regUpdate = { name: cleanName, city: cleanCity };
+      if (priority) { regUpdate.priority = true; regUpdate.status = "approved"; }
+      await supabaseClient.from(REG_TABLE).update(regUpdate).eq("allowed_player_id", id).eq("event_id", REG_ROW_ID).neq("status", "rejected");
       await renderRegistrationAdmin();
-      showToast(`✓ ${name} mis à jour.`);
+      showToast(`✓ ${cleanName} mis à jour.`);
     }));
 
     els.registrationAdminContent.querySelectorAll("[data-toggle-allowed-priority]").forEach(btn => btn.addEventListener("click", async () => {
@@ -920,26 +928,17 @@ function renderTeamForm(draft = null) {
     els.registrationAdminContent.querySelectorAll("[data-delete-allowed]").forEach(btn => btn.addEventListener("click", async () => {
       const row = allowedPlayers.find(p => p.id === btn.dataset.deleteAllowed);
       if (!row) return;
-      if (!confirm(`Supprimer définitivement ${row.name} de la liste autorisée ?`)) return;
-
-      // Keep any existing registration record, but detach it from the whitelist
-      // first so the foreign-key constraint does not block the deletion.
-      const { error: detachError } = await supabaseClient
+      if (!confirm(`Supprimer définitivement ${row.name} de la base de données ?\n\nSes éventuelles inscriptions seront également supprimées afin de pouvoir réajouter ce nom immédiatement.`)) return;
+      const { error: regError } = await supabaseClient
         .from(REG_TABLE)
-        .update({ allowed_player_id: null })
-        .eq("allowed_player_id", row.id)
-        .eq("event_id", REG_ROW_ID);
-      if (detachError) { showToast(`Erreur Supabase: ${detachError.message}`); return; }
-
-      const { error } = await supabaseClient
-        .from(REG_ALLOWED_TABLE)
         .delete()
-        .eq("id", row.id)
-        .eq("event_id", REG_ROW_ID);
-      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
-
+        .eq("event_id", REG_ROW_ID)
+        .ilike("name", row.name);
+      if (regError) { showToast(`Erreur suppression inscription: ${regError.message}`); return; }
+      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).delete().eq("id", row.id).eq("event_id", REG_ROW_ID);
+      if (error) { showToast(`Erreur suppression joueur: ${error.message}`); return; }
       await renderRegistrationAdmin();
-      showToast(`✓ ${row.name} supprimé de la liste autorisée.`);
+      showToast(`✓ ${row.name} supprimé définitivement.`);
     }));
 
     els.registrationAdminContent.querySelectorAll("[data-approve-registration]").forEach(btn => btn.addEventListener("click", async () => {
@@ -948,7 +947,7 @@ function renderTeamForm(draft = null) {
       const { error } = await supabaseClient.from(REG_TABLE).update({ status: "approved", priority: !!allowed?.priority }).eq("id", btn.dataset.approveRegistration).eq("event_id", REG_ROW_ID);
       if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
       const current = await readRegistrations();
-      if (current.filter(r => (r.status || "pending") === "approved").length >= 28) await writeRegistrationSettings(false);
+      if (current.filter(r => (r.status || "pending") === "approved").length >= 42) await writeRegistrationSettings(false);
       await renderRegistrationAdmin();
     }));
 
@@ -959,7 +958,7 @@ function renderTeamForm(draft = null) {
     }));
 
     els.registrationAdminContent.querySelectorAll("[data-reapprove-registration]").forEach(btn => btn.addEventListener("click", async () => {
-      if (approved.length >= 28) { showToast("28 joueurs approuvés maximum."); return; }
+      if (approved.length >= 42) { showToast("42 joueurs approuvés maximum."); return; }
       const { error } = await supabaseClient.from(REG_TABLE).update({ status: "pending" }).eq("id", btn.dataset.reapproveRegistration).eq("event_id", REG_ROW_ID);
       if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
       await renderRegistrationAdmin();
@@ -1050,9 +1049,9 @@ function renderTeamForm(draft = null) {
 
     const rows = await readRegistrations();
     const activeRequests = rows.filter(r => ["approved", "pending"].includes(r.status || "approved"));
-    if (activeRequests.length >= 28) {
+    if (activeRequests.length >= 42) {
       await writeRegistrationSettings(false);
-      showToast("La liste est complète : 28 joueurs maximum.");
+      showToast("La liste est complète : 42 joueurs maximum.");
       await enterRegistrationMode();
       return;
     }
@@ -1116,7 +1115,7 @@ function renderTeamForm(draft = null) {
   function registrationTeamPlan(count) {
     const n = Number(count) || 0;
     if (n < 10) return { valid: false, message: "Il faut au moins 10 joueurs pour créer une équipe de 2 équipes (minimum 5 par équipe)." };
-    const teamCount = Math.min(4, Math.floor(n / 5));
+    const teamCount = Math.min(6, Math.floor(n / 5));
     if (teamCount < 2) return { valid: false, message: "Minimum 2 équipes et 5 joueurs par équipe." };
     const base = Math.floor(n / teamCount);
     const extra = n % teamCount;
@@ -1132,7 +1131,7 @@ function renderTeamForm(draft = null) {
   }
 
   function validateRegistrationPlan(total, teamCount, playersPerTeam) {
-    if (![2,3,4].includes(teamCount)) return "Choisis entre 2 et 4 équipes.";
+    if (![2,3,4,5,6].includes(teamCount)) return "Choisis entre 2 et 6 équipes.";
     if (![5,6,7].includes(playersPerTeam)) return "Choisis entre 5 et 7 joueurs par équipe.";
     const min = teamCount * 5;
     const max = teamCount * 7;
@@ -1307,6 +1306,7 @@ function renderTeamForm(draft = null) {
     ];
     ids.forEach(id => document.getElementById(id)?.classList.add("hidden"));
     els.appTopbar?.classList.toggle("hidden", !admin);
+    document.getElementById("mobileBottomNav")?.classList.toggle("hidden", !admin);
     document.getElementById(screenId)?.classList.remove("hidden");
   }
 
@@ -2844,6 +2844,9 @@ function renderTeamForm(draft = null) {
   document.getElementById("registrationBackBtn")?.addEventListener("click", showAccess);
   els.registrationName?.addEventListener("change", () => {});
   document.getElementById("liveBackBtn")?.addEventListener("click", showAccess);
+  document.querySelectorAll("[data-mobile-target]").forEach(btn => {
+    btn.addEventListener("click", () => document.getElementById(btn.dataset.mobileTarget)?.click());
+  });
 
   renderTeamForm();
 
@@ -2851,6 +2854,31 @@ function renderTeamForm(draft = null) {
   // Restore the Supabase admin session after refresh. The password is not requested again
   // while the authenticated session remains valid.
   restoreAdminSession();
+  // PWA installation
+  let deferredInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    deferredInstallPrompt = event;
+    document.querySelectorAll("[data-install-app]").forEach(btn => btn.classList.remove("hidden"));
+  });
+  document.querySelectorAll("[data-install-app]").forEach(btn => btn.addEventListener("click", async () => {
+    if (deferredInstallPrompt) {
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice;
+      deferredInstallPrompt = null;
+      document.querySelectorAll("[data-install-app]").forEach(b => b.classList.add("hidden"));
+      return;
+    }
+    alert("Sur iPhone/iPad : ouvre le menu Partager puis « Sur l’écran d’accueil ».\nSur Android/Chrome : menu ⋮ puis « Installer l’application » ou « Ajouter à l’écran d’accueil ».");
+  }));
+  window.addEventListener("appinstalled", () => {
+    document.querySelectorAll("[data-install-app]").forEach(btn => btn.classList.add("hidden"));
+    showToast("✓ Sunday Football est installé comme application.");
+  });
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(err => console.warn("PWA SW:", err)));
+  }
+
 })();
 
   document.addEventListener("visibilitychange", () => {
