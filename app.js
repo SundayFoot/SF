@@ -457,6 +457,34 @@ function renderTeamForm(draft = null) {
     return data || { is_open: false };
   }
 
+
+  async function readPriorityCities() {
+    if (!supabaseClient) return [];
+    const { data, error } = await supabaseClient
+      .from(REG_SETTINGS_TABLE)
+      .select("priority_cities")
+      .eq("id", REG_ROW_ID)
+      .maybeSingle();
+    if (error) { console.error("Priority cities read error", error); return []; }
+    return Array.isArray(data?.priority_cities) ? data.priority_cities : [];
+  }
+
+  function cityMatchesPriority(city, priorityCities) {
+    const c=String(city||"").trim().toLocaleLowerCase();
+    return !!c && (priorityCities||[]).some(x=>String(x||"").trim().toLocaleLowerCase()===c);
+  }
+
+  async function savePriorityCities(cities) {
+    if (accessMode !== "admin") return false;
+    if (!(await ensureAdminSession())) return false;
+    const clean=[...new Set((cities||[]).map(c=>String(c||"").trim()).filter(Boolean))];
+    const { error }=await supabaseClient.from(REG_SETTINGS_TABLE)
+      .update({priority_cities:clean,updated_at:new Date().toISOString()})
+      .eq("id",REG_ROW_ID);
+    if(error){showToast(`Erreur Supabase: ${error.message}`);return false;}
+    return true;
+  }
+
   async function ensureAdminSession() {
     if (!supabaseClient) initSupabase();
     if (!supabaseClient) return false;
@@ -498,7 +526,7 @@ function renderTeamForm(draft = null) {
     if (!supabaseClient) return [];
     const { data, error } = await supabaseClient
       .from(REG_ALLOWED_TABLE)
-      .select("id,event_id,name,priority,active,created_at")
+      .select("id,event_id,name,city,priority,active,created_at")
       .eq("event_id", REG_ROW_ID)
       .eq("active", true)
       .order("priority", { ascending: false })
@@ -511,9 +539,9 @@ function renderTeamForm(draft = null) {
     if (!supabaseClient || accessMode !== "admin") return [];
     const { data, error } = await supabaseClient
       .from(REG_ALLOWED_TABLE)
-      .select("id,event_id,name,priority,active,created_at")
+      .select("id,event_id,name,city,priority,active,created_at")
       .eq("event_id", REG_ROW_ID)
-      .order("active", { ascending: false })
+      .eq("active", true)
       .order("name", { ascending: true });
     if (error) { console.error("Allowed players admin read error", error); showToast(`Erreur Supabase: ${error.message}`); return []; }
     return Array.isArray(data) ? data : [];
@@ -538,7 +566,7 @@ function renderTeamForm(draft = null) {
         : list;
       const limited = filtered.slice(0, 12);
       results.innerHTML = limited.length
-        ? limited.map(p => `<button type="button" class="registration-name-option ${String(p.id) === currentId ? "selected" : ""}" data-registration-player-id="${escapeHtml(p.id)}">${escapeHtml(p.name)}</button>`).join("")
+        ? limited.map(p => `<button type="button" class="registration-name-option ${String(p.id) === currentId ? "selected" : ""}" data-registration-player-id="${escapeHtml(p.id)}"><strong>${escapeHtml(p.name)}</strong>${p.city ? `<span class="registration-city-label">📍 ${escapeHtml(p.city)}</span>` : ""}</button>`).join("")
         : `<div class="registration-name-empty">Aucun nom correspondant.</div>`;
 
       results.querySelectorAll("[data-registration-player-id]").forEach(btn => {
@@ -578,7 +606,7 @@ function renderTeamForm(draft = null) {
     if (!supabaseClient) return [];
     const { data, error } = await supabaseClient
       .from(REG_TABLE)
-      .select("id,name,status,priority,created_at")
+      .select("id,name,city,status,priority,created_at")
       .eq("event_id", REG_ROW_ID)
       .order("created_at", { ascending: true });
     if (error) { console.error("Registrations read error", error); return []; }
@@ -599,7 +627,7 @@ function renderTeamForm(draft = null) {
     }
     target.innerHTML = list.map((r, i) => `
       <div class="registration-item">
-        <span><strong>${i + 1}.</strong> ${escapeHtml(r.name)}</span>
+        <span><strong>${i + 1}.</strong> ${escapeHtml(r.name)}${r.city ? ` <span class="registration-city-label">📍 ${escapeHtml(r.city)}</span>` : ""}</span>
         ${accessMode === "admin" ? `<button type="button" class="danger-small" data-delete-registration="${escapeHtml(r.id)}">✕</button>` : ""}
       </div>`).join("");
 
@@ -638,19 +666,38 @@ function renderTeamForm(draft = null) {
           <p class="muted small">Seuls les noms de cette liste peuvent envoyer une demande. L'administrateur contrôle entièrement cette liste.</p>
           <div class="registration-add-row">
             <input id="adminAddAllowedName" maxlength="60" placeholder="Nom / prénom autorisé">
+            <input id="adminAddAllowedCity" maxlength="60" placeholder="Ville">
             <label class="priority-check"><input id="adminAddAllowedPriority" type="checkbox"> ⭐ Prioritaire</label>
             <button id="adminAddAllowedBtn" class="primary">＋ Ajouter à la liste</button>
           </div>
           <div class="allowed-player-admin-list">
             ${allowedPlayers.length ? allowedPlayers.map(p => `
-              <div class="registration-admin-row allowed-row ${p.active ? "" : "inactive-row"}">
-                <div><strong>${escapeHtml(p.name)}</strong>${p.priority ? '<span class="priority-badge">⭐ PRIORITAIRE</span>' : ''}${!p.active ? '<span class="muted tiny"> · désactivé</span>' : ''}</div>
+              <div class="registration-admin-row allowed-row">
+                <div class="allowed-admin-main">
+                  <div class="allowed-admin-edit-grid">
+                    <input class="allowed-edit-name" data-edit-allowed-name="${escapeHtml(p.id)}" value="${escapeHtml(p.name)}" maxlength="60">
+                    <input class="allowed-edit-city" data-edit-allowed-city="${escapeHtml(p.id)}" value="${escapeHtml(p.city||"")}" maxlength="60" placeholder="Ville">
+                  </div>
+                  ${p.priority ? '<span class="priority-badge">⭐ PRIORITAIRE</span>' : ''}
+                </div>
                 <div class="registration-row-actions">
+                  <button type="button" class="primary small-btn" data-save-allowed-person="${escapeHtml(p.id)}">💾 Enregistrer</button>
                   <button type="button" class="secondary small-btn" data-toggle-allowed-priority="${escapeHtml(p.id)}">${p.priority ? '☆ Retirer priorité' : '⭐ Prioritaire'}</button>
-                  ${p.active ? `<button type="button" class="danger-small" data-delete-allowed="${escapeHtml(p.id)}">🗑️</button>` : `<button type="button" class="secondary small-btn" data-reactivate-allowed="${escapeHtml(p.id)}">↩ Activer</button>`}
+                  <button type="button" class="danger-small" data-delete-allowed="${escapeHtml(p.id)}">🗑️ Supprimer</button>
                 </div>
               </div>`).join('') : `<div class="muted small">La liste autorisée est vide. Ajoute les personnes que vous connaissez avant d'ouvrir les inscriptions.</div>`}
           </div>
+        </div>
+
+
+        <div class="registration-section-block priority-city-admin">
+          <div class="section-title">📍 Villes prioritaires</div>
+          <p class="muted small">Choisis une ou plusieurs villes. Les personnes dont la ville correspond seront <strong>acceptées automatiquement</strong> lors de leur inscription. Cette règle est invisible pour les visiteurs.</p>
+          <div class="priority-city-add">
+            <input id="priorityCityInput" maxlength="60" placeholder="Exemple : Sens">
+            <button id="addPriorityCityBtn" class="secondary">＋ Ajouter la ville</button>
+          </div>
+          <div id="priorityCityList" class="priority-city-list"></div>
         </div>
 
         <div class="registration-stats-grid">
@@ -663,6 +710,7 @@ function renderTeamForm(draft = null) {
           <div class="section-title">⭐ Ajouter directement un joueur connu</div>
           <div class="registration-add-row">
             <input id="adminAddRegistrationName" maxlength="60" placeholder="Nom / prénom">
+            <input id="adminAddRegistrationCity" maxlength="60" placeholder="Ville">
             <label class="priority-check"><input id="adminAddRegistrationPriority" type="checkbox"> ⭐ Prioritaire</label>
             <button id="adminAddRegistrationBtn" class="primary">＋ Ajouter</button>
           </div>
@@ -696,7 +744,7 @@ function renderTeamForm(draft = null) {
           <div id="pendingRegistrationList">
             ${pending.length ? pending.map((r, i) => `
               <div class="registration-admin-row pending-row">
-                <div><strong>${escapeHtml(r.name)}</strong><div class="muted tiny">Demande ${i + 1} · ${new Date(r.created_at).toLocaleString('fr-FR')}</div></div>
+                <div><strong>${escapeHtml(r.name)}</strong>${r.city ? `<div class="muted tiny">📍 ${escapeHtml(r.city)}</div>` : ""}<div class="muted tiny">Demande ${i + 1} · ${new Date(r.created_at).toLocaleString('fr-FR')}</div></div>
                 <div class="registration-row-actions">
                   <button type="button" class="primary small-btn" data-approve-registration="${escapeHtml(r.id)}">✅ Accepter</button>
                   <button type="button" class="danger-small" data-reject-registration="${escapeHtml(r.id)}">✕ Refuser</button>
@@ -710,7 +758,7 @@ function renderTeamForm(draft = null) {
           <div id="approvedRegistrationList">
             ${approved.length ? approved.map((r, i) => `
               <div class="registration-admin-row approved-row ${r.priority ? "priority-row" : ""}">
-                <div><strong>${i + 1}. ${escapeHtml(r.name)}</strong>${r.priority ? '<span class="priority-badge">⭐ PRIORITAIRE</span>' : ''}</div>
+                <div><strong>${i + 1}. ${escapeHtml(r.name)}</strong>${r.city ? `<div class="muted tiny">📍 ${escapeHtml(r.city)}</div>` : ""}${r.priority ? '<span class="priority-badge">⭐ PRIORITAIRE</span>' : ''}</div>
                 <div class="registration-row-actions">
                   <button type="button" class="secondary small-btn" data-toggle-priority="${escapeHtml(r.id)}">${r.priority ? "☆ Retirer priorité" : "⭐ Prioritaire"}</button>
                   <button type="button" class="danger-small" data-delete-registration="${escapeHtml(r.id)}">🗑️</button>
@@ -739,6 +787,51 @@ function renderTeamForm(draft = null) {
     document.getElementById("registrationPlayersPerTeam")?.addEventListener("change", updatePlanInfo);
     updatePlanInfo();
 
+    const renderPriorityCitiesAdmin = async () => {
+      const cities = await readPriorityCities();
+      const box = document.getElementById("priorityCityList");
+      if (!box) return;
+      box.innerHTML = cities.length
+        ? cities.map(city => `<span class="priority-city-chip">📍 ${escapeHtml(city)} <button type="button" data-remove-priority-city="${escapeHtml(city)}">×</button></span>`).join("")
+        : `<span class="muted small">Aucune ville prioritaire.</span>`;
+      box.querySelectorAll("[data-remove-priority-city]").forEach(btn => btn.addEventListener("click", async () => {
+        const next=cities.filter(c=>c.toLocaleLowerCase()!==String(btn.dataset.removePriorityCity).toLocaleLowerCase());
+        if (await savePriorityCities(next)) {
+          await renderPriorityCitiesAdmin();
+          await renderRegistrationAdmin();
+          showToast("✓ Ville retirée des priorités.");
+        }
+      }));
+    };
+    await renderPriorityCitiesAdmin();
+
+    document.getElementById("addPriorityCityBtn")?.addEventListener("click", async () => {
+      const input=document.getElementById("priorityCityInput");
+      const city=String(input?.value||"").trim().replace(/\s+/g," ");
+      if (!city) { showToast("Saisis une ville."); return; }
+      const cities=await readPriorityCities();
+      if (!cities.some(c=>c.toLocaleLowerCase()===city.toLocaleLowerCase())) cities.push(city);
+      if (await savePriorityCities(cities)) {
+        // Apply the new city rule immediately to known people and their existing requests.
+        const allowedAll=await readAllAllowedPlayersAdmin();
+        for (const person of allowedAll) {
+          if (String(person.city||"").trim().toLocaleLowerCase()===city.toLocaleLowerCase()) {
+            await supabaseClient.from(REG_ALLOWED_TABLE).update({priority:true}).eq("id",person.id).eq("event_id",REG_ROW_ID);
+          }
+        }
+        const { data: regs }=await supabaseClient.from(REG_TABLE).select("id,allowed_player_id,city,name,status").eq("event_id",REG_ROW_ID);
+        for (const r of (regs||[])) {
+          if (String(r.city||"").trim().toLocaleLowerCase()===city.toLocaleLowerCase() && r.status==="pending") {
+            await supabaseClient.from(REG_TABLE).update({status:"approved",priority:true}).eq("id",r.id).eq("event_id",REG_ROW_ID);
+          }
+        }
+        input.value="";
+        await renderPriorityCitiesAdmin();
+        await renderRegistrationAdmin();
+        showToast(`✓ ${city} est maintenant prioritaire.`);
+      }
+    });
+
     document.getElementById("toggleRegistrationBtn")?.addEventListener("click", async () => {
       const next = !settings.is_open;
       if (next && approved.length >= 28) { showToast("Les 28 places approuvées sont déjà complètes."); return; }
@@ -761,6 +854,7 @@ function renderTeamForm(draft = null) {
       const input = document.getElementById("adminAddRegistrationName");
       const name = String(input?.value || "").trim().replace(/\s+/g, " ");
       const isPriority = !!document.getElementById("adminAddRegistrationPriority")?.checked;
+      const city = String(document.getElementById("adminAddRegistrationCity")?.value || "").trim();
       if (name.length < 2) { showToast("Entre un nom valide."); return; }
       if (approved.length >= 28) { showToast("28 joueurs approuvés maximum."); return; }
       const existingAllowed = allowedPlayers.find(p => p.active && String(p.name).trim().toLocaleLowerCase() === name.toLocaleLowerCase());
@@ -768,7 +862,7 @@ function renderTeamForm(draft = null) {
       if (!allowedId) {
         const { data: allowedRow, error: allowedError } = await supabaseClient
           .from(REG_ALLOWED_TABLE)
-          .insert({ event_id: REG_ROW_ID, name, priority: isPriority, active: true })
+          .insert({ event_id: REG_ROW_ID, name, city, priority: isPriority || cityMatchesPriority(city, await readPriorityCities()), active: true })
           .select("id,name,priority,active")
           .single();
         if (allowedError) { showToast(`Erreur liste autorisée: ${allowedError.message}`); return; }
@@ -776,7 +870,7 @@ function renderTeamForm(draft = null) {
       }
       const exists = rows.some(r => String(r.allowed_player_id || "") === String(allowedId) || String(r.name || "").trim().toLocaleLowerCase() === name.toLocaleLowerCase());
       if (exists) { showToast("Ce joueur est déjà dans les inscriptions."); return; }
-      const { error } = await supabaseClient.from(REG_TABLE).insert({ event_id: REG_ROW_ID, allowed_player_id: allowedId, name, status: "approved", priority: isPriority });
+      const { error } = await supabaseClient.from(REG_TABLE).insert({ event_id: REG_ROW_ID, allowed_player_id: allowedId, name, city, status: "approved", priority: isPriority || cityMatchesPriority(city, await readPriorityCities()) });
       if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
       await renderRegistrationAdmin();
       showToast(`✓ ${name} ajouté${isPriority ? " comme prioritaire" : ""}.`);
@@ -786,14 +880,34 @@ function renderTeamForm(draft = null) {
       const input = document.getElementById("adminAddAllowedName");
       const name = String(input?.value || "").trim().replace(/\s+/g, " ");
       const priorityValue = !!document.getElementById("adminAddAllowedPriority")?.checked;
+      const city = String(document.getElementById("adminAddAllowedCity")?.value || "").trim();
       if (name.length < 2) { showToast("Entre un nom valide."); return; }
       const exists = allowedPlayers.some(p => String(p.name).trim().toLocaleLowerCase() === name.toLocaleLowerCase());
       if (exists) { showToast("Ce nom existe déjà dans la liste autorisée."); return; }
-      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).insert({ event_id: REG_ROW_ID, name, priority: priorityValue, active: true });
+      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).insert({ event_id: REG_ROW_ID, name, city, priority: priorityValue || cityMatchesPriority(city, await readPriorityCities()), active: true });
       if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
       await renderRegistrationAdmin();
       showToast(`✓ ${name} ajouté à la liste autorisée.`);
     });
+
+    els.registrationAdminContent.querySelectorAll("[data-save-allowed-person]").forEach(btn => btn.addEventListener("click", async () => {
+      const id=btn.dataset.saveAllowedPerson;
+      const name=String(els.registrationAdminContent.querySelector(`[data-edit-allowed-name="${id}"]`)?.value||"").trim().replace(/\s+/g," ");
+      const city=String(els.registrationAdminContent.querySelector(`[data-edit-allowed-city="${id}"]`)?.value||"").trim().replace(/\s+/g," ");
+      if(name.length<2){showToast("Entre un nom valide.");return;}
+      const cities=await readPriorityCities();
+      const existing=await readAllAllowedPlayersAdmin();
+      const current=existing.find(p=>String(p.id)===String(id));
+      const priority=!!(current?.priority || cityMatchesPriority(city,cities));
+      const {error}=await supabaseClient.from(REG_ALLOWED_TABLE).update({name,city,priority}).eq("id",id).eq("event_id",REG_ROW_ID);
+      if(error){showToast(`Erreur Supabase: ${error.message}`);return;}
+      // Keep matching registration data synchronized without removing a manual priority.
+      const regUpdate={name,city};
+      if(priority) { regUpdate.priority=true; regUpdate.status="approved"; }
+      await supabaseClient.from(REG_TABLE).update(regUpdate).eq("allowed_player_id",id).eq("event_id",REG_ROW_ID).neq("status","rejected");
+      await renderRegistrationAdmin();
+      showToast(`✓ ${name} mis à jour.`);
+    }));
 
     els.registrationAdminContent.querySelectorAll("[data-toggle-allowed-priority]").forEach(btn => btn.addEventListener("click", async () => {
       const row = allowedPlayers.find(p => p.id === btn.dataset.toggleAllowedPriority);
@@ -806,16 +920,26 @@ function renderTeamForm(draft = null) {
     els.registrationAdminContent.querySelectorAll("[data-delete-allowed]").forEach(btn => btn.addEventListener("click", async () => {
       const row = allowedPlayers.find(p => p.id === btn.dataset.deleteAllowed);
       if (!row) return;
-      if (!confirm(`Retirer ${row.name} de la liste autorisée ? Les anciennes inscriptions ne seront pas supprimées.`)) return;
-      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).update({ active: false }).eq("id", row.id).eq("event_id", REG_ROW_ID);
-      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
-      await renderRegistrationAdmin();
-    }));
+      if (!confirm(`Supprimer définitivement ${row.name} de la liste autorisée ?`)) return;
 
-    els.registrationAdminContent.querySelectorAll("[data-reactivate-allowed]").forEach(btn => btn.addEventListener("click", async () => {
-      const { error } = await supabaseClient.from(REG_ALLOWED_TABLE).update({ active: true }).eq("id", btn.dataset.reactivateAllowed).eq("event_id", REG_ROW_ID);
+      // Keep any existing registration record, but detach it from the whitelist
+      // first so the foreign-key constraint does not block the deletion.
+      const { error: detachError } = await supabaseClient
+        .from(REG_TABLE)
+        .update({ allowed_player_id: null })
+        .eq("allowed_player_id", row.id)
+        .eq("event_id", REG_ROW_ID);
+      if (detachError) { showToast(`Erreur Supabase: ${detachError.message}`); return; }
+
+      const { error } = await supabaseClient
+        .from(REG_ALLOWED_TABLE)
+        .delete()
+        .eq("id", row.id)
+        .eq("event_id", REG_ROW_ID);
       if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+
       await renderRegistrationAdmin();
+      showToast(`✓ ${row.name} supprimé de la liste autorisée.`);
     }));
 
     els.registrationAdminContent.querySelectorAll("[data-approve-registration]").forEach(btn => btn.addEventListener("click", async () => {
@@ -958,8 +1082,9 @@ function renderTeamForm(draft = null) {
       event_id: REG_ROW_ID,
       allowed_player_id: allowedPlayerId,
       name: person.name,
-      status: "pending",
-      priority: false
+      city: person.city || "",
+      status: person.priority ? "approved" : "pending",
+      priority: !!person.priority
     });
 
     if (error) {
@@ -1445,7 +1570,7 @@ function renderTeamForm(draft = null) {
   }
 
   function startFirstMatch() {
-    shuffleArray(state.queue);
+    if (!state.manualFirstOrder) shuffleArray(state.queue);
     const firstA = state.queue.shift();
     const firstB = state.queue.shift();
     if (firstA === undefined || firstB === undefined) {
@@ -1776,7 +1901,11 @@ function renderTeamForm(draft = null) {
       if (scorersAEl) scorersAEl.innerHTML = `⚽ ${scorerSummary(state.scorersA)}`;
       if (scorersBEl) scorersBEl.innerHTML = `⚽ ${scorerSummary(state.scorersB)}`;
       els.leaderPoints.textContent = sortedTeams()[0]?.points ?? 0;
-      els.drawBtn.textContent = `🤝 Égalité — 0-0 après ${state.settings.matchMinutes} min`;
+      els.winABtn.textContent = `🏆 ${a?.name || "Équipe A"} gagne`;
+      els.winBBtn.textContent = `🏆 ${b?.name || "Équipe B"} gagne`;
+      els.goalABtn.textContent = `⚽ But — ${a?.name || "Équipe A"}`;
+      els.goalBBtn.textContent = `⚽ But — ${b?.name || "Équipe B"}`;
+      els.drawBtn.textContent = `🤝 Égalité — ${a?.name || "Équipe A"} / ${b?.name || "Équipe B"} — ${state.settings.matchMinutes} min`;
     } else {
       els.teamAName.innerHTML = `<span>—</span>`;
       els.teamBName.innerHTML = `<span>—</span>`;
@@ -1861,51 +1990,143 @@ function renderTeamForm(draft = null) {
   function renderManageTeams() {
     if (!state || accessMode !== "admin" || !els.manageTeamsContent) return;
 
-    els.manageTeamsContent.innerHTML = state.teams.map((team, teamIndex) => {
-      const players = Array.isArray(team.players) ? team.players : [];
-      return `
-        <div class="manage-team-card" data-manage-team="${teamIndex}" style="--team-color:${getTeamColor(team, teamIndex)}">
-          <div class="manage-team-head">
-            <div class="manage-team-title">
-              <span class="team-color-dot" style="background:${getTeamColor(team, teamIndex)}"></span>
-              ${teamJerseyHtml(team,teamIndex,"manage-team-jersey")}
-              <strong style="color:${getTeamColor(team, teamIndex)}">Équipe ${escapeHtml(team.name)}</strong>
-              <span class="badges">${players.length} joueur${players.length > 1 ? "s" : ""}</span>
-            </div>
-            <label class="manage-team-name">
-              <span>Nom</span>
-              <input class="manage-team-name-input" data-team-name="${teamIndex}" value="${escapeHtml(team.name)}" maxlength="40">
-            </label>
-            <label class="manage-team-name">
-              <span>Couleur</span>
-              <select class="manage-team-color-select" data-team-color="${teamIndex}">
-                ${teamColorOptions(getTeamColor(team, teamIndex))}
-              </select>
-            </label>
-          </div>
+    if ((!Array.isArray(state.queue) || state.queue.length === 0) && !state.active) {
+      state.queue = state.teams.map((_, i) => i);
+    }
+    const order = state.queue.slice();
 
-          <div class="manage-player-list" data-manage-player-list="${teamIndex}">
-            ${players.length ? players.map((player, playerIndex) => `
-              <div class="manage-player-row">
-                <span class="player-number">${playerIndex + 1}</span>
-                <input class="manage-player-input" data-player-name="${teamIndex}:${playerIndex}" value="${escapeHtml(player)}" maxlength="60">
-                <select class="manage-player-team-select" data-player-team="${teamIndex}:${playerIndex}" title="Déplacer le joueur">
-                  ${state.teams.map((targetTeam,targetIndex)=>`<option value="${targetIndex}" ${targetIndex===teamIndex?"selected":""}>${escapeHtml(targetTeam.name)}</option>`).join("")}
-                </select>
-                <button type="button" class="danger-small icon-delete" data-delete-player="${teamIndex}:${playerIndex}" title="Supprimer ${escapeHtml(player)}" aria-label="Supprimer ${escapeHtml(player)}">🗑️</button>
-              </div>
-            `).join("") : `<div class="muted small empty-player-list">Aucun joueur dans cette équipe.</div>`}
-          </div>
-
-          <div class="manage-add-player-row">
-            <input class="manage-new-player-input" data-new-player="${teamIndex}" maxlength="60" placeholder="Nom du nouveau joueur">
-            <button type="button" class="secondary manage-add-player" data-add-manage-player="${teamIndex}">＋ Ajouter</button>
-          </div>
+    const orderHtml = order.length ? order.map((id, pos) => {
+      const team = state.teams[id];
+      return `<div class="manage-order-row" style="--team-color:${getTeamColor(team,id)}">
+        <span class="queue-num">${pos + 1}</span>
+        ${teamJerseyHtml(team,id,"manage-order-jersey")}
+        <strong style="color:${getTeamColor(team,id)}">${escapeHtml(team?.name || "—")}</strong>
+        <div class="manage-order-actions">
+          <button type="button" class="secondary icon-order" data-queue-up="${id}" ${pos===0?"disabled":""}>↑</button>
+          <button type="button" class="secondary icon-order" data-queue-down="${id}" ${pos===order.length-1?"disabled":""}>↓</button>
         </div>
-      `;
-    }).join("");
+      </div>`;
+    }).join("") : `<p class="muted small">Aucune équipe dans la file d'attente.</p>`;
+
+    els.manageTeamsContent.innerHTML = `
+      <div class="manage-control-card">
+        <div class="section-title">➕ Ajouter une équipe</div>
+        <p class="muted small">Tu peux ajouter une équipe sans créer un nouveau tournoi. Elle rejoindra la file d'attente.</p>
+        <div class="manage-add-team-grid">
+          <input id="manageNewTeamName" maxlength="40" placeholder="Nom de l'équipe">
+          <select id="manageNewTeamColor">${teamColorOptions("Rouge")}</select>
+          <input id="manageNewTeamPlayers" class="wide" maxlength="180" placeholder="5 à 7 joueurs, séparés par des virgules">
+          <button type="button" class="primary" id="addManageTeamBtn">＋ Ajouter l'équipe</button>
+        </div>
+      </div>
+
+      <div class="manage-control-card">
+        <div class="section-title">📋 Ordre des prochaines équipes</div>
+        <p class="muted small">Déplace les équipes avec ↑ ↓. L'ordre est conservé et utilisé pour les prochains matchs. Pour le premier match, le premier choix est respecté.</p>
+        <div class="manage-order-list">${orderHtml}</div>
+      </div>
+
+      ${state.teams.map((team, teamIndex) => {
+        const players = Array.isArray(team.players) ? team.players : [];
+        return `
+          <div class="manage-team-card" data-manage-team="${teamIndex}" style="--team-color:${getTeamColor(team, teamIndex)}">
+            <div class="manage-team-head">
+              <div class="manage-team-title">
+                <span class="team-color-dot" style="background:${getTeamColor(team, teamIndex)}"></span>
+                ${teamJerseyHtml(team,teamIndex,"manage-team-jersey")}
+                <strong style="color:${getTeamColor(team, teamIndex)}">Équipe ${escapeHtml(team.name)}</strong>
+                <span class="badges">${players.length} joueur${players.length > 1 ? "s" : ""}</span>
+              </div>
+              <label class="manage-team-name">
+                <span>Nom</span>
+                <input class="manage-team-name-input" data-team-name="${teamIndex}" value="${escapeHtml(team.name)}" maxlength="40">
+              </label>
+              <label class="manage-team-name">
+                <span>Couleur</span>
+                <select class="manage-team-color-select" data-team-color="${teamIndex}">
+                  ${teamColorOptions(getTeamColor(team, teamIndex))}
+                </select>
+              </label>
+              <label class="manage-team-name manage-points-field">
+                <span>Points</span>
+                <input class="manage-points-input" type="number" min="0" step="1" data-team-points="${teamIndex}" value="${Number(team.points)||0}">
+              </label>
+            </div>
+
+            <div class="manage-player-list" data-manage-player-list="${teamIndex}">
+              ${players.length ? players.map((player, playerIndex) => `
+                <div class="manage-player-row">
+                  <span class="player-number">${playerIndex + 1}</span>
+                  <input class="manage-player-input" data-player-name="${teamIndex}:${playerIndex}" value="${escapeHtml(player)}" maxlength="60">
+                  <select class="manage-player-team-select" data-player-team="${teamIndex}:${playerIndex}" title="Déplacer le joueur">
+                    ${state.teams.map((targetTeam,targetIndex)=>`<option value="${targetIndex}" ${targetIndex===teamIndex?"selected":""}>${escapeHtml(targetTeam.name)}</option>`).join("")}
+                  </select>
+                  <button type="button" class="danger-small icon-delete" data-delete-player="${teamIndex}:${playerIndex}" title="Supprimer ${escapeHtml(player)}" aria-label="Supprimer ${escapeHtml(player)}">🗑️</button>
+                </div>
+              `).join("") : `<div class="muted small empty-player-list">Aucun joueur dans cette équipe.</div>`}
+            </div>
+
+            <div class="manage-add-player-row">
+              <input class="manage-new-player-input" data-new-player="${teamIndex}" maxlength="60" placeholder="Nom du nouveau joueur">
+              <button type="button" class="secondary manage-add-player" data-add-manage-player="${teamIndex}">＋ Ajouter</button>
+            </div>
+          </div>
+        `;
+      }).join("")}
+    `;
 
     renderCaptainSelection();
+
+    document.getElementById("addManageTeamBtn")?.addEventListener("click", () => {
+      if (state.phase === "complete" || state.tournamentWinnerId !== null) {
+        showToast("🏁 Le tournoi est terminé. Crée un nouveau tournoi pour ajouter une équipe.");
+        return;
+      }
+      const nameInput=document.getElementById("manageNewTeamName");
+      const colorInput=document.getElementById("manageNewTeamColor");
+      const playersInput=document.getElementById("manageNewTeamPlayers");
+      const name=(nameInput?.value||"").trim();
+      const players=(playersInput?.value||"").split(",").map(v=>v.trim()).filter(Boolean);
+      if (!name) { showToast("⚠️ Saisis le nom de l'équipe."); return; }
+      if (players.length < 5 || players.length > 7) {
+        showToast("⚠️ Une équipe doit avoir entre 5 et 7 joueurs.");
+        return;
+      }
+      if (state.teams.some(t=>String(t.name||"").trim().toLocaleLowerCase()===name.toLocaleLowerCase())) {
+        showToast("⚠️ Une équipe porte déjà ce nom.");
+        return;
+      }
+      const newId = state.teams.reduce((max,t)=>Math.max(max,Number(t.id)||0),-1)+1;
+      const newTeam={id:newId,name,color:colorInput?.value||"Rouge",captain:"",players,wins:0,draws:0,losses:0,points:0,goalsFor:0,goalsAgainst:0,image:""};
+      state.teams.push(newTeam);
+      if (!Array.isArray(state.queue)) state.queue=[];
+      if (!state.active) state.queue=state.teams.map((_,i)=>i);
+      else state.queue.push(state.teams.length-1);
+      state.manualFirstOrder=true;
+      saveState();
+      renderManageTeams();
+      renderGame();
+      showToast(`✓ ${name} a été ajoutée à la file d'attente.`);
+    });
+
+    els.manageTeamsContent.querySelectorAll("[data-queue-up]").forEach(btn => btn.addEventListener("click", () => {
+      const id=Number(btn.dataset.queueUp);
+      const idx=state.queue.indexOf(id);
+      if (idx>0) {
+        [state.queue[idx-1],state.queue[idx]]=[state.queue[idx],state.queue[idx-1]];
+        state.manualFirstOrder=true;
+        saveState(); renderManageTeams(); renderGame();
+      }
+    }));
+    els.manageTeamsContent.querySelectorAll("[data-queue-down]").forEach(btn => btn.addEventListener("click", () => {
+      const id=Number(btn.dataset.queueDown);
+      const idx=state.queue.indexOf(id);
+      if (idx>=0 && idx<state.queue.length-1) {
+        [state.queue[idx+1],state.queue[idx]]=[state.queue[idx],state.queue[idx+1]];
+        state.manualFirstOrder=true;
+        saveState(); renderManageTeams(); renderGame();
+      }
+    }));
 
     els.manageTeamsContent.querySelectorAll("[data-add-manage-player]").forEach(btn => {
       btn.addEventListener("click", () => {
@@ -1956,6 +2177,10 @@ function renderTeamForm(draft = null) {
     els.manageTeamsContent.querySelectorAll("[data-team-color]").forEach(select=>{
       const i=Number(select.dataset.teamColor); if(state.teams[i])state.teams[i].color=getTeamColor({color:select.value},i);
     });
+    els.manageTeamsContent.querySelectorAll("[data-team-points]").forEach(input=>{
+      const i=Number(input.dataset.teamPoints);
+      if(state.teams[i]) state.teams[i].points=Math.max(0,Number(input.value)||0);
+    });
 
     const next=state.teams.map(()=>[]);
     for(const input of [...els.manageTeamsContent.querySelectorAll("[data-player-name]")]){
@@ -1977,18 +2202,21 @@ function renderTeamForm(draft = null) {
     state.captains=selected;
 
     const firstTournamentLaunch = !state.active && !state.history?.length && Number(state.matchNumber || 0) === 0;
+    if (firstTournamentLaunch && (!Array.isArray(state.queue) || state.queue.length === 0)) {
+      state.queue = state.teams.map((_, i) => i);
+    }
+    state.manualFirstOrder = true;
     saveState();
 
     if (firstTournamentLaunch) {
       if (state.teams.length < 2) { showToast("⚠️ Il faut au moins 2 équipes."); return; }
-      state.queue = state.teams.map((_, i) => i);
       startFirstMatch();
       showToast("⚽ Tournoi créé. Le premier match est prêt — le chrono reste en pause.");
       return;
     }
 
     renderGame();renderManageTeams();refreshCaptainSelection();
-    showToast("✓ Modifications enregistrées. Les joueurs peuvent toujours être déplacés sans créer un nouveau tournoi.");
+    showToast("✓ Modifications enregistrées. Équipes, ordre, points et joueurs ont été mis à jour.");
   }
 
   function openManageTeams() {

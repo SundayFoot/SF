@@ -1096,3 +1096,54 @@ label{color:#aebbd0}
   #liveScreen .public-dashboard-jersey{width:40px;height:43px}
   #liveScreen .public-dashboard-grid{grid-template-columns:1fr!important}
 }
+
+/* V7.4 admin team controls */
+.manage-control-card{
+  margin:0 0 12px;padding:14px;border:1px solid var(--border);
+  border-radius:16px;background:linear-gradient(145deg,#101f34,#0a1626);
+}
+.manage-add-team-grid{
+  display:grid;grid-template-columns:1fr 140px;gap:8px;align-items:center;
+}
+.manage-add-team-grid .wide{grid-column:1/-1}
+.manage-order-list{display:grid;gap:6px}
+.manage-order-row{
+  display:grid;grid-template-columns:24px 38px minmax(0,1fr) auto;
+  align-items:center;gap:7px;padding:7px 8px;border:1px solid var(--border);
+  border-left:3px solid var(--team-color);border-radius:12px;background:var(--card2);
+}
+.manage-order-jersey{width:34px;height:38px;object-fit:contain}
+.manage-order-actions{display:flex;gap:4px}
+.icon-order{min-width:34px!important;width:34px!important;padding:5px!important}
+.manage-points-field{max-width:130px}
+.manage-points-input{width:90px!important}
+@media(max-width:700px){
+  .manage-add-team-grid{grid-template-columns:1fr}
+  .manage-add-team-grid .wide{grid-column:auto}
+  .manage-add-team-grid button{width:100%}
+  .manage-order-row{grid-template-columns:20px 32px minmax(0,1fr) auto}
+  .manage-order-jersey{width:29px;height:32px}
+  .manage-points-field{max-width:none}
+}
+
+/* V7.5 cities / priority management */
+.priority-city-add{display:grid;grid-template-columns:1fr auto;gap:8px}
+.priority-city-list{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+.priority-city-chip{
+  display:inline-flex;align-items:center;gap:5px;padding:7px 9px;border-radius:999px;
+  background:#132944;border:1px solid #315477;color:#bfe0ff;font-weight:800;font-size:12px
+}
+.priority-city-chip button{
+  border:0;background:transparent;color:#9bb5ce;font-size:16px;line-height:1;cursor:pointer;padding:0 2px
+}
+.allowed-admin-main{min-width:0;flex:1}
+.allowed-admin-edit-grid{display:grid;grid-template-columns:1fr 150px;gap:7px;margin-bottom:5px}
+.allowed-edit-name,.allowed-edit-city{
+  width:100%;box-sizing:border-box;background:#0b1728;color:#f6f9fc;border:1px solid #2d4662;border-radius:10px;padding:8px 9px
+}
+.registration-name-option{display:flex!important;align-items:center;justify-content:space-between;gap:8px}
+.registration-city-label{font-size:10px;color:#7890aa}
+@media(max-width:700px){
+  .priority-city-add{grid-template-columns:1fr}
+  .allowed-admin-edit-grid{grid-template-columns:1fr}
+}

@@ -102,3 +102,20 @@ Pour remplacer les visuels plus tard, il suffit de garder les mêmes noms de fic
 - Les maillots locaux sont dans `assets/jersey-*.svg` et sont utilisés dans Live, Équipes, prochain match et gestion Admin.
 - Après le tirage, `Enregistrer les modifications` lance automatiquement le tournoi et prépare le premier match. Le chrono reste volontairement en pause : l’Admin appuie ensuite sur `Commencer le match`.
 - Les déplacements de joueurs restent possibles depuis `Équipes & joueurs` sans créer un nouveau tournoi, tant que les équipes restent entre 5 et 7 joueurs.
+
+
+## V7.5 — villes et priorités configurables
+- Les personnes autorisées possèdent maintenant un nom + une ville.
+- L’Admin peut modifier le nom et la ville d’une personne sans supprimer son inscription.
+- L’Admin peut ajouter une ou plusieurs villes prioritaires (ex. Sens).
+- Une inscription d’une personne dont la ville correspond à une ville prioritaire est automatiquement approuvée.
+- La priorité n’est jamais affichée aux visiteurs.
+- Migration Supabase: `supabase_v7_5_cities_priority.sql`.
+
+## V7.6 — Suppression définitive des joueurs autorisés
+
+- Le bouton `🗑️ Supprimer` supprime maintenant réellement la personne de `registration_allowed_players` au lieu de la passer en `active=false`.
+- La personne supprimée disparaît immédiatement de la liste administrateur.
+- Les anciennes inscriptions restent conservées : leur lien avec la liste autorisée est simplement détaché avant la suppression afin de respecter la clé étrangère Supabase.
+- Les anciennes lignes déjà désactivées par V7.5 sont masquées automatiquement de la liste.
+- Un script optionnel `supabase_v7_6_delete_whitelist.sql` permet de nettoyer définitivement les anciennes lignes `active=false` déjà présentes dans Supabase.
