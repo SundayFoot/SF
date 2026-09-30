@@ -3018,7 +3018,7 @@ function renderTeamForm(draft = null) {
   els.addTeamBtn?.addEventListener("click", addSetupTeam);
   els.removeTeamBtn?.addEventListener("click", removeSetupTeam);
   els.startTournamentBtn.addEventListener("click", beginTournament);
-  els.newTournamentBtn.addEventListener("click", newTournament);
+  els.newTournamentBtn?.addEventListener("click", newTournament);
   document.getElementById("currentTournamentTopBtn")?.addEventListener("click",()=>{if(state&&Array.isArray(state.teams)&&state.teams.length)showGame();else showToast("Aucun tournoi en cours.");});
   els.homeDashboardBtn?.addEventListener("click", showDashboard);
   els.topRegistrationBtn?.addEventListener("click", openRegistrationAdmin);

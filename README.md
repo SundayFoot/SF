@@ -28,3 +28,7 @@ Le cache du service worker a été versionné en V8.0 afin que les téléphones 
 - L'ordre manuel des équipes reste prioritaire pour le premier match.
 - Notifications : demande de permission sécurisée HTTPS, attente du Service Worker et bouton de test. Les notifications Realtime restent dépendantes de la connexion Supabase Realtime.
 - Cache PWA version V8.1.
+
+
+## V8.2 — Correction navigation
+Correction critique : le bouton desktop `newTournamentBtn` avait été retiré de l'HTML mobile, mais le JavaScript essayait encore de lui attacher un événement sans vérifier son existence. Cela arrêtait l'exécution du reste du JavaScript, donc les boutons de l'écran d'accueil ne répondaient plus. Le binding est maintenant optionnel et le cache Service Worker est passé en V8.2.
