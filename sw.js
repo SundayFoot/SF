@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sunday-football-v7-9';
+const CACHE_NAME = 'sunday-football-v8-0';
 const APP_SHELL = [
   './',
   './index.html',

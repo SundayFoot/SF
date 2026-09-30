@@ -10,6 +10,10 @@
   <meta name="apple-mobile-web-app-title" content="Sunday Football">
   <title>Sunday Football</title>
   <link rel="manifest" href="manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-config.js"></script>
@@ -90,13 +94,21 @@
       </div>
       <div id="liveContent"></div>
       <nav id="liveMobileBottomNav" class="mobile-live-bottom-nav" aria-label="Navigation live mobile">
-        <button type="button" class="active" data-live-view="live"><span>●</span><small>Live</small></button>
-        <button type="button" data-live-view="ranking"><span>☷</span><small>Classement</small></button>
-        <button type="button" data-live-view="history"><span>▤</span><small>Historique</small></button>
-        <button type="button" data-live-view="field"><span>⚽</span><small>Terrain</small></button>
-        <button type="button" data-live-view="teams"><span>♟</span><small>Équipe</small></button>
+        <button type="button" class="active" data-live-view="live"><span><i class="fa-solid fa-house"></i></span><small>Accueil</small></button>
+        <button type="button" data-live-view="ranking"><span><i class="fa-solid fa-list-ol"></i></span><small>Classement</small></button>
+        <button type="button" data-live-view="history"><span><i class="fa-solid fa-clock-rotate-left"></i></span><small>Historique</small></button>
+        <button type="button" data-live-view="field"><span><i class="fa-solid fa-futbol"></i></span><small>Terrain</small></button>
+        <button type="button" data-live-view="teams"><span><i class="fa-solid fa-users"></i></span><small>Équipe</small></button>
       </nav>
     </section>
+
+    <nav id="publicMobileNav" class="public-mobile-nav hidden" aria-label="Navigation publique mobile">
+      <button type="button" data-public-action="home"><span><i class="fa-solid fa-house"></i></span><small>Accueil</small></button>
+      <button type="button" data-public-action="registration"><span><i class="fa-solid fa-clipboard-list"></i></span><small>Inscriptions</small></button>
+      <button type="button" data-public-action="live"><span><i class="fa-solid fa-futbol"></i></span><small>Live</small></button>
+      <button type="button" data-public-action="teams"><span><i class="fa-solid fa-users"></i></span><small>Équipes</small></button>
+    </nav>
+
     <header id="appTopbar" class="topbar hidden">
       <div class="brand-block">
         <img class="brand-mark" src="assets/football-mark.svg" alt="" aria-hidden="true">
@@ -115,11 +127,11 @@
     </header>
 
     <nav id="mobileBottomNav" class="mobile-bottom-nav hidden" aria-label="Navigation mobile">
-      <button type="button" data-mobile-target="homeDashboardBtn"><span class="mobile-nav-icon">🏠</span><span>Accueil</span></button>
-      <button type="button" data-mobile-target="topRegistrationBtn"><span class="mobile-nav-icon">📝</span><span>Inscriptions</span></button>
-      <button type="button" data-mobile-target="currentTournamentTopBtn"><span class="mobile-nav-icon">🏟️</span><span>En cours</span></button>
-      <button type="button" data-mobile-target="manageTeamsBtn"><span class="mobile-nav-icon">👥</span><span>Équipes</span></button>
-      <button type="button" data-mobile-target="newTournamentBtn"><span class="mobile-nav-icon">＋</span><span>Nouveau</span></button>
+      <button type="button" data-mobile-action="home"><span class="mobile-nav-icon"><i class="fa-solid fa-house"></i></span><span>Accueil</span></button>
+      <button type="button" data-mobile-action="registration"><span class="mobile-nav-icon"><i class="fa-solid fa-clipboard-list"></i></span><span>Inscriptions</span></button>
+      <button type="button" data-mobile-action="current"><span class="mobile-nav-icon"><i class="fa-solid fa-trophy"></i></span><span>En cours</span></button>
+      <button type="button" data-mobile-action="teams"><span class="mobile-nav-icon"><i class="fa-solid fa-users"></i></span><span>Équipes</span></button>
+      <button type="button" data-mobile-action="new"><span class="mobile-nav-icon"><i class="fa-solid fa-plus"></i></span><span>Nouveau</span></button>
     </nav>
 
     <section id="dashboardPage" class="screen hidden">
