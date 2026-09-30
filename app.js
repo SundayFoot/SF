@@ -1118,6 +1118,7 @@ function renderTeamForm(draft = null) {
     els.gameScreen.classList.add("hidden");
     document.getElementById("liveScreen")?.classList.add("hidden");
     els.registrationScreen?.classList.remove("hidden");
+    document.getElementById("publicMobileNav")?.classList.remove("hidden");
     if (!supabaseClient) initSupabase();
     const settings = await readRegistrationSettings();
     const remoteTournament = await remoteRead();
@@ -1439,6 +1440,7 @@ function renderTeamForm(draft = null) {
     ids.forEach(id => document.getElementById(id)?.classList.add("hidden"));
     els.appTopbar?.classList.toggle("hidden", !admin);
     document.getElementById("mobileBottomNav")?.classList.toggle("hidden", !admin);
+    document.getElementById("publicMobileNav")?.classList.add("hidden");
     document.getElementById(screenId)?.classList.remove("hidden");
   }
 
@@ -1468,6 +1470,7 @@ function renderTeamForm(draft = null) {
     clearAdminIdleTimer();
     if (liveTimerId) { clearInterval(liveTimerId); liveTimerId = null; }
     accessMode = "none";
+    document.getElementById("publicMobileNav")?.classList.add("hidden");
     showOnly("accessScreen", false);
     document.getElementById("adminLoginBox")?.classList.add("hidden");
     const msg = document.getElementById("loginMessage");
@@ -1511,6 +1514,7 @@ function renderTeamForm(draft = null) {
   async function enterPublicTeamsMode() {
     accessMode = "publicTeams";
     stopTimer();
+    document.getElementById("publicMobileNav")?.classList.remove("hidden");
     if (liveTimerId) { clearInterval(liveTimerId); liveTimerId = null; }
     if (!supabaseClient) initSupabase();
     showOnly("publicTeamsScreen", false);
@@ -1612,7 +1616,15 @@ function renderTeamForm(draft = null) {
       <section class="mobile-live-page" data-live-page="teams"><div class="card"><div class="section-title">👥 Équipes & joueurs</div>${teams}</div></section>
     </div>`;
     root.innerHTML=`<div class="live-desktop-layer">${root.innerHTML}</div>${mobile}`;
-    document.querySelectorAll("#liveMobileBottomNav [data-live-view]").forEach(btn=>btn.onclick=()=>{root.querySelectorAll(".mobile-live-page").forEach(p=>p.classList.toggle("is-active",p.dataset.livePage===btn.dataset.liveView));document.querySelectorAll("#liveMobileBottomNav button").forEach(b=>b.classList.toggle("active",b===btn));});
+    document.querySelectorAll("#liveMobileBottomNav [data-live-view]").forEach(btn=>{
+      btn.onclick=(event)=>{
+        event.preventDefault();
+        event.stopPropagation();
+        root.querySelectorAll(".mobile-live-page").forEach(p=>p.classList.toggle("is-active",p.dataset.livePage===btn.dataset.liveView));
+        document.querySelectorAll("#liveMobileBottomNav button").forEach(b=>b.classList.toggle("active",b===btn));
+        window.scrollTo({top:0,behavior:"smooth"});
+      };
+    });
     root.querySelectorAll(".mobile-notification-btn").forEach(btn=>btn.onclick=toggleNotifications);
     updateNotificationButtons();
   }
@@ -1621,6 +1633,7 @@ function renderTeamForm(draft = null) {
     stopRegistrationStatusWatch();
     accessMode="live";
     stopTimer();
+    document.getElementById("publicMobileNav")?.classList.add("hidden");
     document.getElementById("adminLoginBox")?.classList.add("hidden");
     showOnly("liveScreen", false);
     if (!supabaseClient) initSupabase();
@@ -3020,8 +3033,38 @@ function renderTeamForm(draft = null) {
   document.getElementById("liveBackBtn")?.addEventListener("click", showAccess);
   document.getElementById("liveNotificationsBtn")?.addEventListener("click",toggleNotifications);
   document.getElementById("registrationNotificationsBtn")?.addEventListener("click",toggleNotifications);
-  document.querySelectorAll("[data-mobile-target]").forEach(btn => {
-    btn.addEventListener("click", () => document.getElementById(btn.dataset.mobileTarget)?.click());
+  document.querySelectorAll("[data-public-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const action = btn.dataset.publicAction;
+      if (action === "home") return showAccess();
+      if (action === "registration") return enterRegistrationMode();
+      if (action === "live") return enterLiveMode();
+      if (action === "teams") return enterPublicTeamsMode();
+    });
+  });
+
+  const setMobileAdminNav = (action) => {
+    document.querySelectorAll("#mobileBottomNav [data-mobile-action]").forEach(b => b.classList.toggle("is-active", b.dataset.mobileAction === action));
+  };
+  document.querySelectorAll("[data-mobile-action]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const action = btn.dataset.mobileAction;
+      setMobileAdminNav(action);
+      if (action === "home") return showDashboard();
+      if (action === "registration") return openRegistrationAdmin();
+      if (action === "current") {
+        if (!state) return showToast("Aucun tournoi en cours.");
+        showGame();
+        renderGame();
+        if (state.matchStarted && !state.timerPaused) startTimer();
+        return;
+      }
+      if (action === "teams") return showTeamManagementPage();
+      if (action === "new") {
+        showSetup();
+        renderTeamForm();
+      }
+    });
   });
 
   renderTeamForm();
