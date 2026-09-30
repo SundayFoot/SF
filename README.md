@@ -1,44 +1,21 @@
-# Sunday Football V7.8 — liste propre + mobile + PWA
+# Sunday Football V8.0 — Mobile UI/UX redesign
 
-## Changements
-- La liste des joueurs autorisés est maintenant affichée normalement : nom + ville, sans champs de texte permanents.
-- Un bouton **✏️ Modifier** permet de modifier le nom et la ville.
-- **🗑️ Supprimer** supprime réellement le joueur de `registration_allowed_players` et supprime aussi son éventuelle inscription de `player_registrations`, afin que le même nom puisse être ajouté immédiatement après.
-- La liste d'inscription permet maintenant **2 à 6 équipes**.
-- La capacité maximale passe de **28 à 42 joueurs**, nécessaire pour 6 équipes de 5 à 7 joueurs.
-- Le nouveau menu mobile place les fonctions principales en bas sous forme d'icônes.
-- L'application est préparée comme **PWA** : installation sur l'écran d'accueil Android/Chrome et instructions pour iPhone/iPad.
-- Ajout d'un service worker et d'icônes PWA 192x192 / 512x512.
+Cette version reprend **le design et le langage UI/UX du fichier de référence fourni** : fond bleu/noir, cartes glassmorphism, coins arrondis, accent vert, typographie Plus Jakarta Sans / Orbitron, icônes Font Awesome et navigation basse.
 
-## Migration Supabase
-Exécuter une fois dans Supabase SQL Editor :
-`supabase_v7_7_mobile_6teams.sql`
+## Important
+- Le contenu et les fonctions métier existants de V7.9 sont conservés.
+- Le PC garde son interface et son fonctionnement actuels.
+- Les changements visuels ciblent principalement les écrans de téléphone.
+- Le Live mobile est maintenant réellement séparé en pages : Accueil, Classement, Historique, Terrain, Équipe.
+- Les deux navigations mobiles utilisent des événements JavaScript directs ; elles ne dépendent plus du clic programmatique sur des boutons cachés.
+- Le contenu desktop du Live est masqué sur téléphone pour éviter le doublage et l'effet de page géante observé précédemment.
+- La liste admin des joueurs autorisés reste repliable.
+- La PWA et les fonctions Supabase de V7.9 sont conservées.
 
-Cette migration met la limite Supabase à 42 et nettoie définitivement les anciennes lignes `active=false`.
+## Déploiement
+Remplacer les fichiers de la version précédente par ceux de cette ZIP sur GitHub Pages.
+
+Aucune nouvelle migration SQL n'est nécessaire pour le redesign UI/UX de V8.0 : les migrations V7.5 à V7.9 restent incluses dans la ZIP pour conserver l'installation complète.
 
 ## PWA
-Le site doit être servi en HTTPS (GitHub Pages convient). Sur Android/Chrome, le bouton **Ajouter à l'écran d'accueil / Installer** peut afficher l'installation native. Sur iPhone/iPad, utiliser Partager → Sur l'écran d'accueil.
-
-
-## V7.8 — corrections inscriptions
-
-- La recherche publique affiche maintenant **tous** les joueurs autorisés, sans limitation à 12 résultats. La liste reste scrollable et la recherche permet de retrouver rapidement un nom.
-- L'administrateur choisit le **nombre d'équipes pour dimanche (2 à 6)** et le nombre de joueurs par équipe (5 à 7). La configuration est enregistrée dans Supabase.
-- La capacité des inscriptions est calculée automatiquement : nombre d'équipes × joueurs par équipe.
-- La page publique affiche le nombre d'équipes et la capacité configurés.
-- La limite Supabase est maintenant dynamique et ne compte que les inscriptions actives (approuvées + en attente), pas les refusées.
-
-### Migration Supabase V7.8
-Exécuter une seule fois `supabase_v7_8_registration_settings.sql` dans Supabase → SQL Editor.
-
-
-# V7.9 — Navigation mobile, protection et notifications
-
-- Sur téléphone, le Live devient une navigation basse séparée : Live, Classement, Historique, Terrain, Équipe.
-- Sur PC, le contenu existant reste inchangé.
-- La liste admin des joueurs autorisés est repliable pour éviter une page trop longue.
-- Un `device_id` local est conservé pour limiter un navigateur/appareil à 2 demandes actives et retrouver les statuts après actualisation.
-- Les notifications du navigateur peuvent être activées/désactivées avec le bouton 🔔.
-- Les annonces de changement de statut et d'entrée d'équipe utilisent les notifications locales lorsque l'autorisation est accordée.
-- Une vraie notification push lorsque l'application est complètement fermée nécessite un service d'envoi Web Push/VAPID; GitHub Pages seul ne peut pas envoyer cette notification distante.
-- Exécuter une fois `supabase_v7_9_mobile_status_notifications.sql`.
+Le cache du service worker a été versionné en V8.0 afin que les téléphones récupèrent la nouvelle interface au lieu de conserver l'ancien CSS/JS en cache.
