@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sunday-football-v7-8';
+const CACHE_NAME = 'sunday-football-v7-9';
 const APP_SHELL = [
   './',
   './index.html',
@@ -28,4 +28,15 @@ self.addEventListener('fetch', event => {
       return response;
     }).catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html')))
   );
+});
+
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+    for (const client of list) {
+      if ('focus' in client) return client.focus();
+    }
+    if (clients.openWindow) return clients.openWindow('./');
+  }));
 });

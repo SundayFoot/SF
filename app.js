@@ -163,6 +163,15 @@ function editTeamPlayers(teamId) {
       return `<div class="match-announcement-line"><span>⚽</span><strong style="color:${getTeamColor(team, id)}">Équipe « ${escapeHtml(team.name)} » ${label}</strong></div>`;
     }).join("");
     box.classList.remove("hidden");
+    const teamNames=ids.map(id=>state.teams[id]?.name).filter(Boolean).join(" et ");
+    const notificationBody = label.toLowerCase().startsWith("entr")
+      ? `${teamNames} entre${ids.length>1?"nt":""} sur le terrain.`
+      : `${teamNames} ${label.toLowerCase()}.`;
+    notifyPhone("Sunday Football",notificationBody,"team-entry").catch(()=>{});
+    if(accessMode==="admin"&&supabaseClient){
+      supabaseClient.from("tournament_notifications").insert({event_id:"current",kind:"team_entry",title:"Sunday Football",body:notificationBody,team_ids:ids})
+        .then(({error})=>{if(error)console.warn("Notification event:",error.message);});
+    }
     clearTimeout(showMatchAnnouncement.timeout);
     showMatchAnnouncement.timeout = setTimeout(() => box.classList.add("hidden"), 5000);
   }
@@ -389,6 +398,55 @@ function renderTeamForm(draft = null) {
   const ADMIN_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
   let adminIdleTimer = null;
   let adminActivityBound = false;
+  let registrationStatusTimer = null;
+  let tournamentNotificationChannel = null;
+  const DEVICE_ID_KEY = "sf_registration_device_id_v1";
+  const NOTIFY_PREF_KEY = "sf_notifications_enabled_v1";
+  function getRegistrationDeviceId() {
+    try { let id=localStorage.getItem(DEVICE_ID_KEY); if(!id){id=crypto?.randomUUID?crypto.randomUUID():"sf-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2); localStorage.setItem(DEVICE_ID_KEY,id);} return id; }
+    catch { return "sf-session-"+Math.random().toString(36).slice(2); }
+  }
+  function notificationsEnabled(){ try{return localStorage.getItem(NOTIFY_PREF_KEY)==="1";}catch{return false;} }
+  async function enableNotifications(){
+    if(!("Notification" in window)){showToast("Les notifications ne sont pas prises en charge par ce navigateur.");return false;}
+    const p=Notification.permission==="granted"?"granted":await Notification.requestPermission();
+    if(p!=="granted"){showToast("Autorise les notifications dans les réglages du téléphone.");return false;}
+    try{localStorage.setItem(NOTIFY_PREF_KEY,"1");}catch{}
+    updateNotificationButtons();showToast("🔔 Notifications activées sur ce téléphone.");return true;
+  }
+  function disableNotifications(){try{localStorage.setItem(NOTIFY_PREF_KEY,"0");}catch{} updateNotificationButtons();showToast("🔕 Notifications désactivées sur ce téléphone.");}
+  function updateNotificationButtons(){
+    const on=notificationsEnabled()&&("Notification" in window)&&Notification.permission==="granted";
+    document.querySelectorAll(".notification-toggle").forEach(b=>{b.textContent=on?"🔔":"🔕";b.title=on?"Désactiver les notifications":"Activer les notifications";b.setAttribute("aria-pressed",on?"true":"false");});
+  }
+  async function toggleNotifications(){const on=notificationsEnabled()&&("Notification" in window)&&Notification.permission==="granted";if(on)disableNotifications();else await enableNotifications();}
+  async function notifyPhone(title,body,tag="sunday-football"){
+    if(!notificationsEnabled()||!("Notification" in window)||Notification.permission!=="granted")return;
+    try{if("serviceWorker" in navigator){const r=await navigator.serviceWorker.ready;if(r?.showNotification){await r.showNotification(title,{body,tag,icon:"assets/icon-192.png",badge:"assets/icon-192.png",vibrate:[120,60,120],renotify:true});return;}}}catch{}
+    try{new Notification(title,{body,tag,icon:"assets/icon-192.png"});}catch{}
+  }
+  async function subscribeTournamentNotifications(){
+    if(!supabaseClient||tournamentNotificationChannel)return;
+    tournamentNotificationChannel=supabaseClient.channel("sf-tournament-notifications")
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"tournament_notifications",filter:"event_id=eq.current"},async payload=>{
+        const n=payload.new||{}, ids=Array.isArray(n.team_ids)?n.team_ids:[];
+        const myRows=await readMyRegistrations();
+        const myNames=new Set(myRows.filter(r=>r.status==="approved").map(r=>String(r.name||"").trim().toLocaleLowerCase()));
+        const teamIds=ids.map(Number).filter(Number.isInteger);
+        let shouldNotify=false;
+        if(teamIds.length&&state?.teams){
+          shouldNotify=teamIds.some(id=>(state.teams[id]?.players||[]).some(p=>myNames.has(playerDisplayName(p).toLocaleLowerCase())));
+        }
+        if(shouldNotify) await notifyPhone(String(n.title||"Sunday Football"),String(n.body||""),"tournament-event");
+      }).subscribe();
+  }
+  function stopTournamentNotifications(){
+    if(tournamentNotificationChannel&&supabaseClient){try{supabaseClient.removeChannel(tournamentNotificationChannel);}catch{}}
+    tournamentNotificationChannel=null;
+  }
+
+  function startRegistrationStatusWatch(){clearInterval(registrationStatusTimer);if(accessMode!=="registration")return;registrationStatusTimer=setInterval(()=>{if(document.visibilityState==="visible")refreshMyRegistrationStatus(true).catch(()=>{});},20000);}
+  function stopRegistrationStatusWatch(){clearInterval(registrationStatusTimer);registrationStatusTimer=null;}
 
   function onlineConfigured() {
     return !!(window.SF_SUPABASE &&
@@ -614,13 +672,31 @@ function renderTeamForm(draft = null) {
     if (!supabaseClient) return [];
     const { data, error } = await supabaseClient
       .from(REG_TABLE)
-      .select("id,name,city,status,priority,created_at")
+      .select("id,name,city,status,priority,allowed_player_id,device_id,created_at")
       .eq("event_id", REG_ROW_ID)
       .order("created_at", { ascending: true });
     if (error) { console.error("Registrations read error", error); return []; }
     return Array.isArray(data) ? data : [];
   }
 
+  async function readMyRegistrations(){
+    if(!supabaseClient)return[];
+    const deviceId=getRegistrationDeviceId();
+    const rpc=await supabaseClient.rpc("get_my_registration_status",{p_event_id:REG_ROW_ID,p_device_id:deviceId});
+    if(!rpc.error) return Array.isArray(rpc.data)?rpc.data:[];
+    const {data,error}=await supabaseClient.from(REG_TABLE).select("id,name,city,status,priority,allowed_player_id,device_id,created_at").eq("event_id",REG_ROW_ID).eq("device_id",deviceId).order("created_at",{ascending:false});
+    if(error){console.error("My registrations read error",error);return[];} return Array.isArray(data)?data:[];
+  }
+  async function refreshMyRegistrationStatus(announce=false){
+    const target=document.getElementById("myRegistrationStatus"); if(!target||!supabaseClient)return;
+    const rows=await readMyRegistrations();
+    if(!rows.length){target.innerHTML='<span class="muted small">Aucune demande enregistrée sur ce téléphone.</span>';return;}
+    let prev={};try{prev=JSON.parse(localStorage.getItem("sf_registration_status_cache")||"{}");}catch{}
+    const next={};
+    target.innerHTML=rows.map(r=>{const s=r.status||"pending";next[r.id]=s;const label=s==="approved"?"✅ Accepté":s==="rejected"?"❌ Refusé":"⏳ En attente";const cls=s==="approved"?"status-approved":s==="rejected"?"status-rejected":"status-pending";return `<div class="my-status-row ${cls}"><div><strong>${escapeHtml(r.name)}</strong>${r.city?` <span class="registration-city-label">📍 ${escapeHtml(r.city)}</span>`:""}</div><span>${label}</span></div>`;}).join("");
+    if(announce)for(const r of rows)if(prev[r.id]&&prev[r.id]!==r.status){const msg=r.status==="approved"?"Ton inscription pour dimanche est confirmée.":r.status==="rejected"?"Ta demande d'inscription a été refusée.":"Le statut de ton inscription a changé.";await notifyPhone("Sunday Football",`${r.name} — ${msg}`,`registration-${r.id}`);}
+    try{localStorage.setItem("sf_registration_status_cache",JSON.stringify(next));}catch{}
+  }
   function registrationNames(rows) {
     return (rows || []).filter(r => (r?.status || "approved") === "approved").map(r => String(r?.name || "").trim()).filter(Boolean);
   }
@@ -677,7 +753,11 @@ function renderTeamForm(draft = null) {
             <label class="priority-check"><input id="adminAddAllowedPriority" type="checkbox"> ⭐ Prioritaire</label>
             <button id="adminAddAllowedBtn" class="primary">＋ Ajouter à la liste</button>
           </div>
-          <div class="allowed-player-admin-list">
+          <div class="allowed-list-toggle-row">
+            <span class="muted small">${allowedPlayers.length} joueur${allowedPlayers.length>1?"s":""} autorisé${allowedPlayers.length>1?"s":""}</span>
+            <button type="button" class="secondary small-btn" id="toggleAllowedListBtn">👁️ Afficher la liste</button>
+          </div>
+          <div class="allowed-player-admin-list allowed-list-collapsed" id="allowedPlayerAdminList">
             ${allowedPlayers.length ? allowedPlayers.map(p => `
               <div class="registration-admin-row allowed-row">
                 <div class="allowed-admin-main">
@@ -783,6 +863,10 @@ function renderTeamForm(draft = null) {
         </div>
       </div>`;
 
+    document.getElementById("toggleAllowedListBtn")?.addEventListener("click",()=>{
+      const list=document.getElementById("allowedPlayerAdminList"),btn=document.getElementById("toggleAllowedListBtn");
+      if(!list||!btn)return;const hidden=list.classList.toggle("allowed-list-collapsed");btn.textContent=hidden?"👁️ Afficher la liste":"🙈 Masquer la liste";
+    });
     const updatePlanInfo = () => {
       const { teamCount, playersPerTeam } = getRegistrationPlan();
       const min = teamCount * 5, max = teamCount * 7;
@@ -1036,6 +1120,8 @@ function renderTeamForm(draft = null) {
     els.registrationScreen?.classList.remove("hidden");
     if (!supabaseClient) initSupabase();
     const settings = await readRegistrationSettings();
+    const remoteTournament = await remoteRead();
+    if (remoteTournament) state = remoteTournament;
     const open = !!settings.is_open;
     const registrationCapacity = getRegistrationCapacity(settings);
     const registrationTeams = [2,3,4,5,6].includes(Number(settings.team_count)) ? Number(settings.team_count) : 6;
@@ -1051,6 +1137,10 @@ function renderTeamForm(draft = null) {
     renderPublicAllowedPlayerSelect(allowedPlayers);
     const rows = open ? await readRegistrations() : [];
     renderRegistrationList(rows);
+    await refreshMyRegistrationStatus(false);
+    startRegistrationStatusWatch();
+    updateNotificationButtons();
+    subscribeTournamentNotifications();
     subscribeRegistrationRealtime();
   }
 
@@ -1079,6 +1169,8 @@ function renderTeamForm(draft = null) {
     }
 
     const rows = await readRegistrations();
+    const myRows=rows.filter(r=>String(r.device_id||"")===getRegistrationDeviceId()&&["approved","pending"].includes(r.status||"approved"));
+    if(myRows.length>=2){showToast("📱 Ce téléphone a déjà atteint la limite de 2 inscriptions.");await refreshMyRegistrationStatus();return;}
     const activeRequests = rows.filter(r => ["approved", "pending"].includes(r.status || "approved"));
     const registrationCapacity = getRegistrationCapacity(settings);
     if (activeRequests.length >= registrationCapacity) {
@@ -1115,7 +1207,8 @@ function renderTeamForm(draft = null) {
       name: person.name,
       city: person.city || "",
       status: person.priority ? "approved" : "pending",
-      priority: !!person.priority
+      priority: !!person.priority,
+      device_id: getRegistrationDeviceId()
     });
 
     if (error) {
@@ -1370,6 +1463,8 @@ function renderTeamForm(draft = null) {
 
   function showAccess() {
     stopTimer();
+    stopRegistrationStatusWatch();
+    stopTournamentNotifications();
     clearAdminIdleTimer();
     if (liveTimerId) { clearInterval(liveTimerId); liveTimerId = null; }
     accessMode = "none";
@@ -1470,6 +1565,7 @@ function renderTeamForm(draft = null) {
       const scorers=getScorerRanking().map(([name,goals],i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(name)}</strong><span class="badges">${goals} but${goals>1?"s":""}</span></div>`).join("");
       const teamTable=state.teams.map((t,i)=>`<div class="public-final-team"><div><span class="team-color-dot" style="background:${getTeamColor(t,i)}"></span><strong>${escapeHtml(t.name)}</strong></div><span class="badges">${Array.isArray(t.players)?t.players.length:0} joueurs</span></div>`).join("");
       root.innerHTML=matchHtml+finalCard+`<div class="grid two"><div class="card live-card"><div class="section-title">🏆 Classement final</div>${ranking}</div><div class="card live-card"><div class="section-title">⚽ Buteurs</div>${scorers||`<p class="muted">Aucun buteur.</p>`}</div></div><div class="card live-card"><div class="section-title">👥 Équipes</div>${teamTable}</div>`;
+      renderMobileLivePages(root);
       if(liveTimerId){clearInterval(liveTimerId);liveTimerId=null;}
       return;
     }
@@ -1496,9 +1592,33 @@ function renderTeamForm(draft = null) {
       let remaining = Number(state.secondsLeft)||0;
       liveTimerId=setInterval(()=>{ remaining=Math.max(0,remaining-1); const t=document.getElementById("liveTimer"); if(t)t.textContent=formatTime(remaining); },1000);
     }
+    renderMobileLivePages(root);
+  }
+
+  function renderMobileLivePages(root){
+    if(!root||!state?.teams)return;
+    const team=id=>state.teams[id];
+    const ranking=sortedTeams().map((t,i)=>`<div class="mobile-live-list-row"><span class="mobile-rank">${i+1}</span>${teamJerseyHtml(t,i,"mobile-live-jersey")}<div><strong style="color:${getTeamColor(t,i)}">${escapeHtml(t.name)}</strong><small>${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</small></div></div>`).join("");
+    const history=(state.history||[]).slice().reverse().map(h=>`<div class="mobile-live-history-row"><span>#${h.number}</span><div>${escapeHtml(h.text)}</div></div>`).join("");
+    const queue=(state.queue||[]).map((id,i)=>`<div class="mobile-live-list-row">${teamJerseyHtml(team(id),id,"mobile-live-jersey")}<div><strong>${escapeHtml(team(id)?.name||"—")}</strong><small>Position ${i+1} · À venir</small></div></div>`).join("");
+    const teams=state.teams.map((t,i)=>`<article class="mobile-live-team-card">${teamJerseyHtml(t,i,"mobile-team-big-jersey")}<strong style="color:${getTeamColor(t,i)}">${escapeHtml(t.name)}</strong><span>${Array.isArray(t.players)?t.players.length:0} joueurs</span><div class="mobile-team-player-list">${(t.players||[]).map((p,j)=>`<div>${j+1}. ${escapeHtml(playerDisplayName(p))}</div>`).join("")||`<span class="muted">Aucun joueur</span>`}</div></article>`).join("");
+    const active=state.active?`${escapeHtml(team(state.active.a)?.name||"—")} <strong>${state.scoreA}</strong> — <strong>${state.scoreB}</strong> ${escapeHtml(team(state.active.b)?.name||"—")}`:"Pas de match en cours";
+    const current=`<div class="mobile-live-current card"><span class="live-status live-now-pill">● EN DIRECT</span><h3>${active}</h3><div class="mobile-live-time">${formatTime(state.phase!=="league"?state.phaseSecondsLeft:state.secondsLeft)}</div><p class="muted">${state.matchStarted?"🟢 Match en cours":"⏸️ Match préparé"}</p></div>`;
+    const mobile=`<div class="mobile-live-pages">
+      <section class="mobile-live-page is-active" data-live-page="live">${current}<div class="card"><div class="section-title">🔔 Notifications</div><button type="button" class="primary full mobile-notification-btn">🔔 ${notificationsEnabled()?"Notifications activées":"Activer les notifications"}</button><p class="muted small">Les annonces peuvent apparaître lorsque l'application est ouverte ou en arrière-plan compatible.</p></div></section>
+      <section class="mobile-live-page" data-live-page="ranking"><div class="card"><div class="section-title">🏆 Classement</div>${ranking||`<p class="muted">Aucun classement.</p>`}</div></section>
+      <section class="mobile-live-page" data-live-page="history"><div class="card"><div class="section-title">📜 Historique des matchs</div>${history||`<p class="muted">Aucun match terminé.</p>`}</div></section>
+      <section class="mobile-live-page" data-live-page="field"><div class="card"><div class="section-title">⚽ Terrain</div>${queue||`<p class="muted">Aucune équipe en attente.</p>`}</div></section>
+      <section class="mobile-live-page" data-live-page="teams"><div class="card"><div class="section-title">👥 Équipes & joueurs</div>${teams}</div></section>
+    </div>`;
+    root.innerHTML=`<div class="live-desktop-layer">${root.innerHTML}</div>${mobile}`;
+    document.querySelectorAll("#liveMobileBottomNav [data-live-view]").forEach(btn=>btn.onclick=()=>{root.querySelectorAll(".mobile-live-page").forEach(p=>p.classList.toggle("is-active",p.dataset.livePage===btn.dataset.liveView));document.querySelectorAll("#liveMobileBottomNav button").forEach(b=>b.classList.toggle("active",b===btn));});
+    root.querySelectorAll(".mobile-notification-btn").forEach(btn=>btn.onclick=toggleNotifications);
+    updateNotificationButtons();
   }
 
   async function enterLiveMode() {
+    stopRegistrationStatusWatch();
     accessMode="live";
     stopTimer();
     document.getElementById("adminLoginBox")?.classList.add("hidden");
@@ -1507,6 +1627,7 @@ function renderTeamForm(draft = null) {
     const remote=await remoteRead();
     state=remote;
     renderLive();
+    subscribeTournamentNotifications();
     subscribeRealtime();
   }
 
@@ -1690,6 +1811,12 @@ function renderTeamForm(draft = null) {
     });
 
     saveState();
+    const winnerMessage=`Fin de match : ${winner.name} a gagné ${state.scoreA}-${state.scoreB} contre ${loser.name}. ${winner.name} reste sur le terrain.`;
+    notifyPhone("Fin de match",winnerMessage,"match-result").catch(()=>{});
+    if(supabaseClient){
+      supabaseClient.from("tournament_notifications").insert({event_id:"current",kind:"match_result",title:"Fin de match",body:winnerMessage,team_ids:[winnerId,loserId]})
+        .then(({error})=>{if(error)console.warn("Notification event:",error.message);});
+    }
     vibrate([180, 80, 180, 80, 350]);
     startNextMatchFromWinner(winnerId, loserId);
   }
@@ -1724,6 +1851,13 @@ function renderTeamForm(draft = null) {
       scorersA: [...(state.scorersA || [])],
       scorersB: [...(state.scorersB || [])]
     });
+
+    const drawMessage=`Fin de match : égalité ${a.name} ${state.scoreA}-${state.scoreB} ${b.name}. Les deux équipes sortent.`;
+    notifyPhone("Fin de match",drawMessage,"match-result").catch(()=>{});
+    if(supabaseClient){
+      supabaseClient.from("tournament_notifications").insert({event_id:"current",kind:"match_result",title:"Fin de match",body:drawMessage,team_ids:[aId,bId]})
+        .then(({error})=>{if(error)console.warn("Notification event:",error.message);});
+    }
 
     // Both teams go to the end of the queue.
     state.queue.push(aId, bId);
@@ -2816,6 +2950,7 @@ function renderTeamForm(draft = null) {
   els.removeTeamBtn?.addEventListener("click", removeSetupTeam);
   els.startTournamentBtn.addEventListener("click", beginTournament);
   els.newTournamentBtn.addEventListener("click", newTournament);
+  document.getElementById("currentTournamentTopBtn")?.addEventListener("click",()=>{if(state&&Array.isArray(state.teams)&&state.teams.length)showGame();else showToast("Aucun tournoi en cours.");});
   els.homeDashboardBtn?.addEventListener("click", showDashboard);
   els.topRegistrationBtn?.addEventListener("click", openRegistrationAdmin);
   els.dashboardRegistrationBtn?.addEventListener("click", openRegistrationAdmin);
@@ -2883,11 +3018,14 @@ function renderTeamForm(draft = null) {
   document.getElementById("registrationBackBtn")?.addEventListener("click", showAccess);
   els.registrationName?.addEventListener("change", () => {});
   document.getElementById("liveBackBtn")?.addEventListener("click", showAccess);
+  document.getElementById("liveNotificationsBtn")?.addEventListener("click",toggleNotifications);
+  document.getElementById("registrationNotificationsBtn")?.addEventListener("click",toggleNotifications);
   document.querySelectorAll("[data-mobile-target]").forEach(btn => {
     btn.addEventListener("click", () => document.getElementById(btn.dataset.mobileTarget)?.click());
   });
 
   renderTeamForm();
+  updateNotificationButtons();
 
   const existing = loadState();
   // Restore the Supabase admin session after refresh. The password is not requested again

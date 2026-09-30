@@ -43,7 +43,7 @@
       <div class="card access-card">
         <div class="topbar-inline">
           <div><h2>📝 Inscription joueurs</h2><p id="registrationStatus" class="muted">Vérification des inscriptions...</p></div>
-          <button id="registrationBackBtn" class="secondary">Accueil</button>
+          <div class="live-header-actions"><button id="registrationNotificationsBtn" class="secondary notification-toggle" type="button" title="Notifications">🔔</button><button id="registrationBackBtn" class="secondary">Accueil</button></div>
         </div>
         <div id="registrationFormBox" class="registration-form-box hidden">
           <label>Choisis ton nom dans la liste
@@ -67,6 +67,10 @@
           <div class="section-title">👥 Joueurs inscrits <span id="registrationCount" class="badges"></span></div>
           <div id="publicRegistrationList"></div>
         </div>
+        <div class="registration-status-box">
+          <div class="section-title">🔔 Mes demandes</div>
+          <div id="myRegistrationStatus" class="muted small">Aucune demande enregistrée sur ce téléphone.</div>
+        </div>
       </div>
     </section>
 
@@ -82,9 +86,16 @@
 
     <section id="liveScreen" class="screen hidden">
       <div class="card">
-        <div class="topbar-inline"><div><h2>👀 Live Match</h2><p id="liveConnection" class="muted">Connexion...</p></div><button id="liveBackBtn" class="secondary">Accueil</button></div>
+        <div class="topbar-inline"><div><h2>👀 Live Match</h2><p id="liveConnection" class="muted">Connexion...</p></div><div class="live-header-actions"><button id="liveNotificationsBtn" class="secondary notification-toggle" type="button" title="Notifications">🔔</button><button id="liveBackBtn" class="secondary">Accueil</button></div></div>
       </div>
       <div id="liveContent"></div>
+      <nav id="liveMobileBottomNav" class="mobile-live-bottom-nav" aria-label="Navigation live mobile">
+        <button type="button" class="active" data-live-view="live"><span>●</span><small>Live</small></button>
+        <button type="button" data-live-view="ranking"><span>☷</span><small>Classement</small></button>
+        <button type="button" data-live-view="history"><span>▤</span><small>Historique</small></button>
+        <button type="button" data-live-view="field"><span>⚽</span><small>Terrain</small></button>
+        <button type="button" data-live-view="teams"><span>♟</span><small>Équipe</small></button>
+      </nav>
     </section>
     <header id="appTopbar" class="topbar hidden">
       <div class="brand-block">
@@ -98,16 +109,17 @@
         <button id="homeDashboardBtn" class="secondary admin-only">🏠 Accueil</button>
         <button id="topRegistrationBtn" class="secondary admin-only">📝 Inscriptions</button>
         <button id="manageTeamsBtn" class="secondary admin-only">👥 Équipes & joueurs</button>
-        <button id="newTournamentBtn" class="secondary admin-only">⚽ Nouveau</button>
+        <button id="newTournamentBtn" class="secondary admin-only">＋ Nouveau tournoi</button>
+        <button id="currentTournamentTopBtn" class="secondary admin-only top-current-tournament">🏟️ Tournoi en cours</button>
       </div>
     </header>
 
     <nav id="mobileBottomNav" class="mobile-bottom-nav hidden" aria-label="Navigation mobile">
       <button type="button" data-mobile-target="homeDashboardBtn"><span class="mobile-nav-icon">🏠</span><span>Accueil</span></button>
       <button type="button" data-mobile-target="topRegistrationBtn"><span class="mobile-nav-icon">📝</span><span>Inscriptions</span></button>
+      <button type="button" data-mobile-target="currentTournamentTopBtn"><span class="mobile-nav-icon">🏟️</span><span>En cours</span></button>
       <button type="button" data-mobile-target="manageTeamsBtn"><span class="mobile-nav-icon">👥</span><span>Équipes</span></button>
-      <button type="button" data-mobile-target="newTournamentBtn"><span class="mobile-nav-icon">⚽</span><span>Nouveau</span></button>
-      <button type="button" data-install-app><span class="mobile-nav-icon">📱</span><span>Installer</span></button>
+      <button type="button" data-mobile-target="newTournamentBtn"><span class="mobile-nav-icon">＋</span><span>Nouveau</span></button>
     </nav>
 
     <section id="dashboardPage" class="screen hidden">

@@ -30,3 +30,15 @@ Le site doit être servi en HTTPS (GitHub Pages convient). Sur Android/Chrome, l
 
 ### Migration Supabase V7.8
 Exécuter une seule fois `supabase_v7_8_registration_settings.sql` dans Supabase → SQL Editor.
+
+
+# V7.9 — Navigation mobile, protection et notifications
+
+- Sur téléphone, le Live devient une navigation basse séparée : Live, Classement, Historique, Terrain, Équipe.
+- Sur PC, le contenu existant reste inchangé.
+- La liste admin des joueurs autorisés est repliable pour éviter une page trop longue.
+- Un `device_id` local est conservé pour limiter un navigateur/appareil à 2 demandes actives et retrouver les statuts après actualisation.
+- Les notifications du navigateur peuvent être activées/désactivées avec le bouton 🔔.
+- Les annonces de changement de statut et d'entrée d'équipe utilisent les notifications locales lorsque l'autorisation est accordée.
+- Une vraie notification push lorsque l'application est complètement fermée nécessite un service d'envoi Web Push/VAPID; GitHub Pages seul ne peut pas envoyer cette notification distante.
+- Exécuter une fois `supabase_v7_9_mobile_status_notifications.sql`.
