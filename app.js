@@ -447,14 +447,22 @@ function renderTeamForm(draft = null) {
   }
 
   async function readRegistrationSettings() {
-    if (!supabaseClient) return { is_open: false };
-    const { data, error } = await supabaseClient
+    if (!supabaseClient) return { is_open: false, team_count: 6, players_per_team: 7 };
+    const extended = await supabaseClient
       .from(REG_SETTINGS_TABLE)
-      .select("id,is_open,updated_at")
+      .select("id,is_open,team_count,players_per_team,priority_cities,updated_at")
       .eq("id", REG_ROW_ID)
       .maybeSingle();
-    if (error) { console.error("Registration settings read error", error); return { is_open: false }; }
-    return data || { is_open: false };
+    if (!extended.error) return extended.data || { is_open: false, team_count: 6, players_per_team: 7 };
+
+    // Compatibility with an older database until the V7.8 migration is executed.
+    const fallback = await supabaseClient
+      .from(REG_SETTINGS_TABLE)
+      .select("id,is_open,priority_cities,updated_at")
+      .eq("id", REG_ROW_ID)
+      .maybeSingle();
+    if (fallback.error) { console.error("Registration settings read error", extended.error); return { is_open: false, team_count: 6, players_per_team: 7 }; }
+    return { ...(fallback.data || {}), team_count: 6, players_per_team: 7 };
   }
 
 
@@ -564,7 +572,7 @@ function renderTeamForm(draft = null) {
       const filtered = query
         ? list.filter(p => String(p.name || "").toLocaleLowerCase().startsWith(query))
         : list;
-      const limited = filtered.slice(0, 12);
+      const limited = filtered;
       results.innerHTML = limited.length
         ? limited.map(p => `<button type="button" class="registration-name-option ${String(p.id) === currentId ? "selected" : ""}" data-registration-player-id="${escapeHtml(p.id)}"><strong>${escapeHtml(p.name)}</strong>${p.city ? `<span class="registration-city-label">📍 ${escapeHtml(p.city)}</span>` : ""}</button>`).join("")
         : `<div class="registration-name-empty">Aucun nom correspondant.</div>`;
@@ -642,9 +650,8 @@ function renderTeamForm(draft = null) {
     const approved = rows.filter(r => (r.status || "approved") === "approved");
     const rejected = rows.filter(r => (r.status || "pending") === "rejected");
     const priority = approved.filter(r => !!r.priority);
-    const autoPlan = registrationTeamPlan(approved.length);
-    const defaultTeams = autoPlan.valid ? autoPlan.teamCount : (approved.length >= 10 ? Math.min(6, Math.floor(approved.length / 5)) : 2);
-    const defaultPlayers = autoPlan.valid ? Math.min(7, Math.max(5, Math.floor(approved.length / Math.max(1, autoPlan.teamCount)))) : 5;
+    const defaultTeams = [2,3,4,5,6].includes(Number(settings.team_count)) ? Number(settings.team_count) : 6;
+    const defaultPlayers = [5,6,7].includes(Number(settings.players_per_team)) ? Number(settings.players_per_team) : 7;
 
     els.registrationAdminContent.innerHTML = `
       <div class="registration-admin-card registration-admin-page-card">
@@ -700,7 +707,7 @@ function renderTeamForm(draft = null) {
         </div>
 
         <div class="registration-stats-grid">
-          <div class="registration-stat"><strong>${approved.length}/42</strong><span>joueurs approuvés</span></div>
+          <div class="registration-stat"><strong>${approved.length}/${getRegistrationCapacity(settings)}</strong><span>joueurs approuvés</span></div>
           <div class="registration-stat pending"><strong>${pending.length}</strong><span>demandes en attente</span></div>
           <div class="registration-stat priority"><strong>${priority.length}</strong><span>prioritaires</span></div>
         </div>
@@ -737,7 +744,7 @@ function renderTeamForm(draft = null) {
             </label>
           </div>
           <p id="registrationPlanInfo" class="muted small"></p>
-          <button id="applyRegistrationPlanBtn" class="secondary full">👥 Utiliser cette configuration</button>
+          <button id="saveRegistrationPlanBtn" class="secondary full">💾 Enregistrer la configuration pour dimanche</button>
         </div>
 
         <div class="registration-section-block">
@@ -755,7 +762,7 @@ function renderTeamForm(draft = null) {
         </div>
 
         <div class="registration-section-block">
-          <div class="section-title">🟢 Joueurs approuvés <span class="badges">${approved.length}/42</span></div>
+          <div class="section-title">🟢 Joueurs approuvés <span class="badges">${approved.length}/${getRegistrationCapacity(settings)}</span></div>
           <div id="approvedRegistrationList">
             ${approved.length ? approved.map((r, i) => `
               <div class="registration-admin-row approved-row ${r.priority ? "priority-row" : ""}">
@@ -787,6 +794,29 @@ function renderTeamForm(draft = null) {
     document.getElementById("registrationTeamCount")?.addEventListener("change", updatePlanInfo);
     document.getElementById("registrationPlayersPerTeam")?.addEventListener("change", updatePlanInfo);
     updatePlanInfo();
+
+    document.getElementById("saveRegistrationPlanBtn")?.addEventListener("click", async () => {
+      const teamCount = Number(document.getElementById("registrationTeamCount")?.value || 0);
+      const playersPerTeam = Number(document.getElementById("registrationPlayersPerTeam")?.value || 0);
+      if (![2,3,4,5,6].includes(teamCount) || ![5,6,7].includes(playersPerTeam)) {
+        showToast("Choisis un nombre d'équipes entre 2 et 6 et 5 à 7 joueurs par équipe.");
+        return;
+      }
+      const capacity = teamCount * playersPerTeam;
+      if (approved.length > capacity) {
+        showToast(`Impossible : ${approved.length} joueurs sont déjà approuvés, alors que cette configuration prévoit ${capacity} joueurs.`);
+        return;
+      }
+      if (!(await ensureAdminSession())) return;
+      const { error } = await supabaseClient.from(REG_SETTINGS_TABLE).update({
+        team_count: teamCount,
+        players_per_team: playersPerTeam,
+        updated_at: new Date().toISOString()
+      }).eq("id", REG_ROW_ID);
+      if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
+      showToast(`✓ Dimanche : ${teamCount} équipes de ${playersPerTeam} joueurs (${capacity} places).`);
+      await renderRegistrationAdmin();
+    });
 
     const renderPriorityCitiesAdmin = async () => {
       const cities = await readPriorityCities();
@@ -835,7 +865,7 @@ function renderTeamForm(draft = null) {
 
     document.getElementById("toggleRegistrationBtn")?.addEventListener("click", async () => {
       const next = !settings.is_open;
-      if (next && approved.length >= 42) { showToast("Les 42 places approuvées sont déjà complètes."); return; }
+      if (next && approved.length >= getRegistrationCapacity(settings)) { showToast(`Les ${getRegistrationCapacity(settings)} places approuvées sont déjà complètes.`); return; }
       const ok = await writeRegistrationSettings(next);
       if (ok) { await renderRegistrationAdmin(); showToast(next ? "📝 Demandes ouvertes." : "🔒 Demandes fermées."); }
     });
@@ -857,7 +887,7 @@ function renderTeamForm(draft = null) {
       const isPriority = !!document.getElementById("adminAddRegistrationPriority")?.checked;
       const city = String(document.getElementById("adminAddRegistrationCity")?.value || "").trim();
       if (name.length < 2) { showToast("Entre un nom valide."); return; }
-      if (approved.length >= 42) { showToast("42 joueurs approuvés maximum."); return; }
+      if (approved.length >= getRegistrationCapacity(settings)) { showToast(`${getRegistrationCapacity(settings)} joueurs approuvés maximum.`); return; }
       const existingAllowed = allowedPlayers.find(p => p.active && String(p.name).trim().toLocaleLowerCase() === name.toLocaleLowerCase());
       let allowedId = existingAllowed?.id;
       if (!allowedId) {
@@ -947,7 +977,7 @@ function renderTeamForm(draft = null) {
       const { error } = await supabaseClient.from(REG_TABLE).update({ status: "approved", priority: !!allowed?.priority }).eq("id", btn.dataset.approveRegistration).eq("event_id", REG_ROW_ID);
       if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
       const current = await readRegistrations();
-      if (current.filter(r => (r.status || "pending") === "approved").length >= 42) await writeRegistrationSettings(false);
+      if (current.filter(r => (r.status || "pending") === "approved").length >= getRegistrationCapacity(await readRegistrationSettings())) await writeRegistrationSettings(false);
       await renderRegistrationAdmin();
     }));
 
@@ -958,7 +988,7 @@ function renderTeamForm(draft = null) {
     }));
 
     els.registrationAdminContent.querySelectorAll("[data-reapprove-registration]").forEach(btn => btn.addEventListener("click", async () => {
-      if (approved.length >= 42) { showToast("42 joueurs approuvés maximum."); return; }
+      if (approved.length >= getRegistrationCapacity(settings)) { showToast(`${getRegistrationCapacity(settings)} joueurs approuvés maximum.`); return; }
       const { error } = await supabaseClient.from(REG_TABLE).update({ status: "pending" }).eq("id", btn.dataset.reapproveRegistration).eq("event_id", REG_ROW_ID);
       if (error) { showToast(`Erreur Supabase: ${error.message}`); return; }
       await renderRegistrationAdmin();
@@ -978,7 +1008,6 @@ function renderTeamForm(draft = null) {
       await renderRegistrationAdmin();
     }));
 
-    document.getElementById("applyRegistrationPlanBtn")?.addEventListener("click", applyRegistrationTeamPlan);
     document.getElementById("createTeamsFromRegistrationsBtn")?.addEventListener("click", prepareTeamsAndDrawFromRegistrations);
   }
 
@@ -1008,8 +1037,10 @@ function renderTeamForm(draft = null) {
     if (!supabaseClient) initSupabase();
     const settings = await readRegistrationSettings();
     const open = !!settings.is_open;
+    const registrationCapacity = getRegistrationCapacity(settings);
+    const registrationTeams = [2,3,4,5,6].includes(Number(settings.team_count)) ? Number(settings.team_count) : 6;
     els.registrationStatus.textContent = open
-      ? "🟢 Les inscriptions sont ouvertes. Inscris-toi pour dimanche."
+      ? `🟢 Les inscriptions sont ouvertes pour dimanche · ${registrationTeams} équipes · ${registrationCapacity} places maximum.`
       : "🔴 Les inscriptions sont fermées pour le moment.";
     els.registrationFormBox?.classList.toggle("hidden", !open);
     els.registrationClosedBox?.classList.toggle("hidden", open);
@@ -1049,9 +1080,10 @@ function renderTeamForm(draft = null) {
 
     const rows = await readRegistrations();
     const activeRequests = rows.filter(r => ["approved", "pending"].includes(r.status || "approved"));
-    if (activeRequests.length >= 42) {
+    const registrationCapacity = getRegistrationCapacity(settings);
+    if (activeRequests.length >= registrationCapacity) {
       await writeRegistrationSettings(false);
-      showToast("La liste est complète : 42 joueurs maximum.");
+      showToast(`La liste est complète : ${registrationCapacity} joueurs maximum.`);
       await enterRegistrationMode();
       return;
     }
@@ -1128,6 +1160,13 @@ function renderTeamForm(draft = null) {
     const teamCount = Number(document.getElementById("registrationTeamCount")?.value || 0);
     const playersPerTeam = Number(document.getElementById("registrationPlayersPerTeam")?.value || 0);
     return { teamCount, playersPerTeam };
+  }
+
+  function getRegistrationCapacity(settings = null) {
+    const teamCount = Number(settings?.team_count || 0);
+    const playersPerTeam = Number(settings?.players_per_team || 0);
+    if (![2,3,4,5,6].includes(teamCount) || ![5,6,7].includes(playersPerTeam)) return 42;
+    return teamCount * playersPerTeam;
   }
 
   function validateRegistrationPlan(total, teamCount, playersPerTeam) {
