@@ -400,6 +400,8 @@ function renderTeamForm(draft = null) {
   let adminActivityBound = false;
   let registrationStatusTimer = null;
   let tournamentNotificationChannel = null;
+  let tournamentNotificationPollTimer = null;
+  let tournamentNotificationLastId = null;
   const DEVICE_ID_KEY = "sf_registration_device_id_v1";
   const NOTIFY_PREF_KEY = "sf_notifications_enabled_v1";
   function getRegistrationDeviceId() {
@@ -408,7 +410,9 @@ function renderTeamForm(draft = null) {
   }
   function notificationsEnabled(){ try{return localStorage.getItem(NOTIFY_PREF_KEY)==="1";}catch{return false;} }
   async function enableNotifications(){
+    if(!window.isSecureContext){showToast("⚠️ Les notifications nécessitent HTTPS.");return false;}
     if(!("Notification" in window)){showToast("Les notifications ne sont pas prises en charge par ce navigateur.");return false;}
+    try { if("serviceWorker" in navigator) await navigator.serviceWorker.ready; } catch {}
     const p=Notification.permission==="granted"?"granted":await Notification.requestPermission();
     if(p!=="granted"){showToast("Autorise les notifications dans les réglages du téléphone.");return false;}
     try{localStorage.setItem(NOTIFY_PREF_KEY,"1");}catch{}
@@ -425,24 +429,54 @@ function renderTeamForm(draft = null) {
     try{if("serviceWorker" in navigator){const r=await navigator.serviceWorker.ready;if(r?.showNotification){await r.showNotification(title,{body,tag,icon:"assets/icon-192.png",badge:"assets/icon-192.png",vibrate:[120,60,120],renotify:true});return;}}}catch{}
     try{new Notification(title,{body,tag,icon:"assets/icon-192.png"});}catch{}
   }
+  async function handleTournamentNotification(n){
+    const ids=Array.isArray(n?.team_ids)?n.team_ids:[];
+    const myRows=await readMyRegistrations();
+    const myNames=new Set(myRows.filter(r=>r.status==="approved").map(r=>String(r.name||"").trim().toLocaleLowerCase()));
+    const teamIds=ids.map(Number).filter(Number.isInteger);
+    let shouldNotify=!teamIds.length;
+    if(teamIds.length&&state?.teams){
+      shouldNotify=teamIds.some(id=>(state.teams[id]?.players||[]).some(p=>myNames.has(playerDisplayName(p).toLocaleLowerCase())));
+    }
+    if(shouldNotify) await notifyPhone(String(n.title||"Sunday Football"),String(n.body||""),"tournament-event");
+  }
+  async function pollTournamentNotifications(){
+    if(!supabaseClient||!notificationsEnabled()) return;
+    try{
+      const {data,error}=await supabaseClient.from("tournament_notifications").select("id,event_id,kind,title,body,team_ids,created_at").eq("event_id","current").order("created_at",{ascending:false}).limit(5);
+      if(error||!Array.isArray(data)||!data.length) return;
+      const rows=[...data].reverse();
+      for(const n of rows){
+        if(tournamentNotificationLastId===null){tournamentNotificationLastId=n.id;continue;}
+        if(n.id===tournamentNotificationLastId) continue;
+        await handleTournamentNotification(n);
+        tournamentNotificationLastId=n.id;
+      }
+    }catch(error){console.warn("Tournament notification poll:",error?.message||error);}
+  }
   async function subscribeTournamentNotifications(){
-    if(!supabaseClient||tournamentNotificationChannel)return;
-    tournamentNotificationChannel=supabaseClient.channel("sf-tournament-notifications")
-      .on("postgres_changes",{event:"INSERT",schema:"public",table:"tournament_notifications",filter:"event_id=eq.current"},async payload=>{
-        const n=payload.new||{}, ids=Array.isArray(n.team_ids)?n.team_ids:[];
-        const myRows=await readMyRegistrations();
-        const myNames=new Set(myRows.filter(r=>r.status==="approved").map(r=>String(r.name||"").trim().toLocaleLowerCase()));
-        const teamIds=ids.map(Number).filter(Number.isInteger);
-        let shouldNotify=false;
-        if(teamIds.length&&state?.teams){
-          shouldNotify=teamIds.some(id=>(state.teams[id]?.players||[]).some(p=>myNames.has(playerDisplayName(p).toLocaleLowerCase())));
-        }
-        if(shouldNotify) await notifyPhone(String(n.title||"Sunday Football"),String(n.body||""),"tournament-event");
-      }).subscribe();
+    if(!supabaseClient)return;
+    if(!tournamentNotificationChannel){
+      tournamentNotificationChannel=supabaseClient.channel("sf-tournament-notifications")
+        .on("postgres_changes",{event:"INSERT",schema:"public",table:"tournament_notifications",filter:"event_id=eq.current"},async payload=>{
+          const n=payload.new||{};
+          tournamentNotificationLastId=n.id||tournamentNotificationLastId;
+          await handleTournamentNotification(n);
+        }).subscribe(status=>{
+          if(status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") console.warn("Tournament notification realtime:",status);
+        });
+    }
+    if(!tournamentNotificationPollTimer){
+      tournamentNotificationLastId=null;
+      await pollTournamentNotifications();
+      tournamentNotificationPollTimer=setInterval(()=>pollTournamentNotifications(),8000);
+    }
   }
   function stopTournamentNotifications(){
     if(tournamentNotificationChannel&&supabaseClient){try{supabaseClient.removeChannel(tournamentNotificationChannel);}catch{}}
     tournamentNotificationChannel=null;
+    if(tournamentNotificationPollTimer){clearInterval(tournamentNotificationPollTimer);tournamentNotificationPollTimer=null;}
+    tournamentNotificationLastId=null;
   }
 
   function startRegistrationStatusWatch(){clearInterval(registrationStatusTimer);if(accessMode!=="registration")return;registrationStatusTimer=setInterval(()=>{if(document.visibilityState==="visible")refreshMyRegistrationStatus(true).catch(()=>{});},20000);}
@@ -1602,30 +1636,52 @@ function renderTeamForm(draft = null) {
   function renderMobileLivePages(root){
     if(!root||!state?.teams)return;
     const team=id=>state.teams[id];
-    const ranking=sortedTeams().map((t,i)=>`<div class="mobile-live-list-row"><span class="mobile-rank">${i+1}</span>${teamJerseyHtml(t,i,"mobile-live-jersey")}<div><strong style="color:${getTeamColor(t,i)}">${escapeHtml(t.name)}</strong><small>${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</small></div></div>`).join("");
+    const color=(t,i)=>getTeamColor(t,i);
+    const active=state.active ? {a:team(state.active.a),b:team(state.active.b)} : null;
+    const remaining=formatTime(state.phase!=="league"?state.phaseSecondsLeft:state.secondsLeft);
+    const scorersA=Array.isArray(state.scorersA)?state.scorersA:[];
+    const scorersB=Array.isArray(state.scorersB)?state.scorersB:[];
+    const scorerRows=[
+      ...scorersA.map(n=>({name:playerDisplayName(n),team:active?.a?.name||"Équipe A",side:"a"})),
+      ...scorersB.map(n=>({name:playerDisplayName(n),team:active?.b?.name||"Équipe B",side:"b"}))
+    ];
+    const scorerHtml=scorerRows.length?scorerRows.map((x,i)=>`<div class="mobile-live-scorer-row"><div class="mobile-live-scorer-icon">⚽</div><div class="mobile-live-scorer-main"><strong>${escapeHtml(x.name)}</strong><small style="color:${color(x.side==='a'?active?.a:active?.b,0)}">${escapeHtml(x.team)}</small></div><span class="mobile-live-scorer-minute">${i+1}</span></div>`).join(""):`<div class="mobile-live-empty">Aucun buteur pour le moment.</div>`;
+    const ranking=sortedTeams().map((t,i)=>`<div class="mobile-live-list-row"><span class="mobile-rank">${i+1}</span>${teamJerseyHtml(t,i,"mobile-live-jersey")}<div><strong style="color:${color(t,i)}">${escapeHtml(t.name)}</strong><small>${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</small></div></div>`).join("");
     const history=(state.history||[]).slice().reverse().map(h=>`<div class="mobile-live-history-row"><span>#${h.number}</span><div>${escapeHtml(h.text)}</div></div>`).join("");
-    const queue=(state.queue||[]).map((id,i)=>`<div class="mobile-live-list-row">${teamJerseyHtml(team(id),id,"mobile-live-jersey")}<div><strong>${escapeHtml(team(id)?.name||"—")}</strong><small>Position ${i+1} · À venir</small></div></div>`).join("");
-    const teams=state.teams.map((t,i)=>`<article class="mobile-live-team-card">${teamJerseyHtml(t,i,"mobile-team-big-jersey")}<strong style="color:${getTeamColor(t,i)}">${escapeHtml(t.name)}</strong><span>${Array.isArray(t.players)?t.players.length:0} joueurs</span><div class="mobile-team-player-list">${(t.players||[]).map((p,j)=>`<div>${j+1}. ${escapeHtml(playerDisplayName(p))}</div>`).join("")||`<span class="muted">Aucun joueur</span>`}</div></article>`).join("");
-    const active=state.active?`${escapeHtml(team(state.active.a)?.name||"—")} <strong>${state.scoreA}</strong> — <strong>${state.scoreB}</strong> ${escapeHtml(team(state.active.b)?.name||"—")}`:"Pas de match en cours";
-    const current=`<div class="mobile-live-current card"><span class="live-status live-now-pill">● EN DIRECT</span><h3>${active}</h3><div class="mobile-live-time">${formatTime(state.phase!=="league"?state.phaseSecondsLeft:state.secondsLeft)}</div><p class="muted">${state.matchStarted?"🟢 Match en cours":"⏸️ Match préparé"}</p></div>`;
+    const queue=(state.queue||[]).map((id,i)=>`<div class="mobile-live-next-row"><span class="mobile-next-number">${i+1}</span>${teamJerseyHtml(team(id),id,"mobile-next-jersey")}<div><strong style="color:${color(team(id),id)}">${escapeHtml(team(id)?.name||"—")}</strong><small>${i===0?"Prochaine équipe à entrer":"Position "+(i+1)}</small></div></div>`).join("");
+    const teams=state.teams.map((t,i)=>`<article class="mobile-live-team-card">${teamJerseyHtml(t,i,"mobile-team-big-jersey")}<strong style="color:${color(t,i)}">${escapeHtml(t.name)}</strong><span>${Array.isArray(t.players)?t.players.length:0} joueurs</span><div class="mobile-team-player-list">${(t.players||[]).map((p,j)=>`<div>${j+1}. ${escapeHtml(playerDisplayName(p))}</div>`).join("")||`<span class="muted">Aucun joueur</span>`}</div></article>`).join("");
+    const matchTitle=active?`${escapeHtml(active.a?.name||"—")} <span>VS</span> ${escapeHtml(active.b?.name||"—")}`:"Pas de match en cours";
+    const score=active?`${state.scoreA} <span>—</span> ${state.scoreB}`:"0 <span>—</span> 0";
+    const status=state.matchStarted?"Match en cours":"Match préparé — en attente du démarrage";
+    const current=`<div class="mobile-live-hero-card">
+      <div class="mobile-live-hero-glow"></div>
+      <div class="mobile-live-status-row"><span class="live-status live-now-pill">● EN DIRECT</span><span class="mobile-live-match-no">MATCH #${state.matchNumber||1}</span></div>
+      <div class="mobile-live-faceoff">
+        <div class="mobile-live-team-side"><div class="mobile-live-jersey-box" style="--team-color:${color(active?.a,0)}">${active?.a?teamJerseyHtml(active.a,state.active.a,"mobile-live-main-jersey"):"⚽"}</div><strong style="color:${color(active?.a,0)}">${escapeHtml(active?.a?.name||"—")}</strong><small>Équipe A</small></div>
+        <div class="mobile-live-score-center"><div class="mobile-live-score">${score}</div><div class="mobile-live-timer">${remaining}</div><span>${status}</span></div>
+        <div class="mobile-live-team-side"><div class="mobile-live-jersey-box" style="--team-color:${color(active?.b,1)}">${active?.b?teamJerseyHtml(active.b,state.active.b,"mobile-live-main-jersey"):"⚽"}</div><strong style="color:${color(active?.b,1)}">${escapeHtml(active?.b?.name||"—")}</strong><small>Équipe B</small></div>
+      </div>
+      <div class="mobile-live-progress"><span style="width:${Math.max(0,Math.min(100,((Number(state.settings?.matchMinutes||5)*60-(Number(state.secondsLeft)||0))/(Number(state.settings?.matchMinutes||5)*60))*100))}%"></span></div>
+    </div>`;
     const mobile=`<div class="mobile-live-pages">
-      <section class="mobile-live-page is-active" data-live-page="live">${current}<div class="card"><div class="section-title">🔔 Notifications</div><button type="button" class="primary full mobile-notification-btn">🔔 ${notificationsEnabled()?"Notifications activées":"Activer les notifications"}</button><p class="muted small">Les annonces peuvent apparaître lorsque l'application est ouverte ou en arrière-plan compatible.</p></div></section>
-      <section class="mobile-live-page" data-live-page="ranking"><div class="card"><div class="section-title">🏆 Classement</div>${ranking||`<p class="muted">Aucun classement.</p>`}</div></section>
-      <section class="mobile-live-page" data-live-page="history"><div class="card"><div class="section-title">📜 Historique des matchs</div>${history||`<p class="muted">Aucun match terminé.</p>`}</div></section>
-      <section class="mobile-live-page" data-live-page="field"><div class="card"><div class="section-title">⚽ Terrain</div>${queue||`<p class="muted">Aucune équipe en attente.</p>`}</div></section>
-      <section class="mobile-live-page" data-live-page="teams"><div class="card"><div class="section-title">👥 Équipes & joueurs</div>${teams}</div></section>
+      <section class="mobile-live-page is-active" data-live-page="live">
+        ${current}
+        <div class="mobile-live-stats-row"><div><strong>${state.teams.length}</strong><small>équipes</small></div><div><strong>${state.history?.length||0}</strong><small>matchs finis</small></div><div><strong>${sortedTeams()[0]?.name||"—"}</strong><small>leader</small></div></div>
+        <div class="card mobile-live-section"><div class="mobile-section-heading"><span><i class="fa-solid fa-futbol"></i> Buteurs du match</span><small>${scorerRows.length} but${scorerRows.length!==1?"s":""}</small></div>${scorerHtml}</div>
+        <div class="card mobile-live-section"><div class="mobile-section-heading"><span><i class="fa-solid fa-forward-step"></i> Prochaine équipe</span><small>Rotation</small></div>${queue?queue.split("</div>").slice(0,1).join("")+"</div>":`<div class="mobile-live-empty">Aucune équipe en attente.</div>`}</div>
+        <div class="card mobile-live-section notification-panel"><div class="mobile-section-heading"><span><i class="fa-solid fa-bell"></i> Notifications</span></div><button type="button" class="primary full mobile-notification-btn">${notificationsEnabled()?"🔔 Notifications activées":"🔔 Activer les notifications"}</button><button type="button" class="secondary full mobile-test-notification-btn">🔔 Tester une notification</button><p class="muted small">Les annonces de buts et de changements de matchs sont envoyées en temps réel lorsque les notifications sont autorisées.</p></div>
+      </section>
+      <section class="mobile-live-page" data-live-page="ranking"><div class="card mobile-live-section"><div class="mobile-section-heading"><span><i class="fa-solid fa-trophy"></i> Classement</span></div>${ranking||`<div class="mobile-live-empty">Aucun classement.</div>`}</div></section>
+      <section class="mobile-live-page" data-live-page="history"><div class="card mobile-live-section"><div class="mobile-section-heading"><span><i class="fa-solid fa-clock-rotate-left"></i> Historique</span></div>${history||`<div class="mobile-live-empty">Aucun match terminé.</div>`}</div></section>
+      <section class="mobile-live-page" data-live-page="field"><div class="card mobile-live-section"><div class="mobile-section-heading"><span><i class="fa-solid fa-futbol"></i> Prochaines équipes</span></div>${queue||`<div class="mobile-live-empty">Aucune équipe en attente.</div>`}</div></section>
+      <section class="mobile-live-page" data-live-page="teams"><div class="mobile-live-team-grid">${teams}</div></section>
     </div>`;
     root.innerHTML=`<div class="live-desktop-layer">${root.innerHTML}</div>${mobile}`;
     document.querySelectorAll("#liveMobileBottomNav [data-live-view]").forEach(btn=>{
-      btn.onclick=(event)=>{
-        event.preventDefault();
-        event.stopPropagation();
-        root.querySelectorAll(".mobile-live-page").forEach(p=>p.classList.toggle("is-active",p.dataset.livePage===btn.dataset.liveView));
-        document.querySelectorAll("#liveMobileBottomNav button").forEach(b=>b.classList.toggle("active",b===btn));
-        window.scrollTo({top:0,behavior:"smooth"});
-      };
+      btn.onclick=(event)=>{event.preventDefault();event.stopPropagation();root.querySelectorAll(".mobile-live-page").forEach(p=>p.classList.toggle("is-active",p.dataset.livePage===btn.dataset.liveView));document.querySelectorAll("#liveMobileBottomNav button").forEach(b=>b.classList.toggle("active",b===btn));window.scrollTo({top:0,behavior:"smooth"});};
     });
     root.querySelectorAll(".mobile-notification-btn").forEach(btn=>btn.onclick=toggleNotifications);
+    root.querySelectorAll(".mobile-test-notification-btn").forEach(btn=>btn.onclick=async()=>{if(!(await enableNotifications()))return;await notifyPhone("Sunday Football","Test de notification réussi. ⚽","test-notification");showToast("🔔 Notification de test envoyée.");});
     updateNotificationButtons();
   }
 
@@ -2995,6 +3051,9 @@ function renderTeamForm(draft = null) {
   els.manageTeamsBtn?.addEventListener("click", openManageTeams);
   els.openRegistrationAdminBtn?.addEventListener("click", openRegistrationAdmin);
   document.getElementById("registrationAdminBackBtn")?.addEventListener("click", closeRegistrationAdmin);
+  document.getElementById("setupBackBtn")?.addEventListener("click", showDashboard);
+  document.getElementById("gameBackBtn")?.addEventListener("click", showDashboard);
+
   els.drawPlayersBtn?.addEventListener("click", drawRegisteredPlayers);
   els.closeManageTeamsBtn?.addEventListener("click", closeManageTeams);
   els.saveTeamPlayersBtn?.addEventListener("click", saveManagedTeams);

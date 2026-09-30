@@ -117,13 +117,6 @@
           <p id="saveStatus">Sauvegarde locale activée</p>
         </div>
       </div>
-      <div class="topbar-actions">
-        <button id="homeDashboardBtn" class="secondary admin-only">🏠 Accueil</button>
-        <button id="topRegistrationBtn" class="secondary admin-only">📝 Inscriptions</button>
-        <button id="manageTeamsBtn" class="secondary admin-only">👥 Équipes & joueurs</button>
-        <button id="newTournamentBtn" class="secondary admin-only">＋ Nouveau tournoi</button>
-        <button id="currentTournamentTopBtn" class="secondary admin-only top-current-tournament">🏟️ Tournoi en cours</button>
-      </div>
     </header>
 
     <nav id="mobileBottomNav" class="mobile-bottom-nav hidden" aria-label="Navigation mobile">
@@ -165,6 +158,7 @@
 
     <section id="setupScreen" class="screen hidden">
       <div class="card setup-card">
+        <div class="admin-page-back-row"><button id="setupBackBtn" class="icon-back" type="button" aria-label="Retour">←</button><span class="muted small">Nouveau tournoi</span></div>
         <div class="setup-visual">
           <img src="assets/hero-football.svg" alt="" aria-hidden="true">
           <div><span class="live-pill">NOUVEAU TOURNOI</span><h2>Nouveau tournoi</h2></div>
@@ -207,18 +201,15 @@
 
     <section id="registrationAdminScreen" class="screen hidden">
       <div class="card registration-admin-page">
-        <div class="topbar-inline">
-          <div>
-            <h2>📝 Inscriptions du dimanche</h2>
-            <p class="muted small">Ouvre les inscriptions, consulte la liste et prépare les équipes avant de créer le tournoi.</p>
-          </div>
-          <button id="registrationAdminBackBtn" class="secondary">← Retour</button>
+        <div class="topbar-inline admin-page-heading">
+          <div class="admin-page-title-wrap"><button id="registrationAdminBackBtn" class="icon-back" type="button" aria-label="Retour">←</button><div><h2>📝 Inscriptions du dimanche</h2><p class="muted small">Ouvre les inscriptions, consulte la liste et prépare les équipes avant de créer le tournoi.</p></div></div>
         </div>
         <div id="registrationAdminContent"></div>
       </div>
     </section>
 
     <section id="gameScreen" class="screen hidden">
+      <div class="admin-page-back-row"><button id="gameBackBtn" class="icon-back" type="button" aria-label="Retour">←</button><span class="muted small">Tournoi en cours</span></div>
       <div id="resumeBanner" class="card resume hidden">
         <div>
           <strong>Tournoi en cours retrouvé</strong>
@@ -323,12 +314,8 @@
 
     <section id="manageTeamsPanel" class="screen hidden" aria-label="Gestion des équipes et joueurs">
       <div class="card manage-card">
-        <div class="topbar-inline">
-          <div>
-            <h2>👥 Équipes & joueurs</h2>
-            <p class="muted small">Modifie les joueurs du tournoi actuel sans créer un nouveau tournoi.</p>
-          </div>
-          <button id="closeManageTeamsBtn" class="secondary">🏠 Retour dashboard</button>
+        <div class="topbar-inline admin-page-heading">
+          <div class="admin-page-title-wrap"><button id="closeManageTeamsBtn" class="icon-back" type="button" aria-label="Retour">←</button><div><h2>👥 Équipes & joueurs</h2><p class="muted small">Modifie les joueurs du tournoi actuel sans créer un nouveau tournoi.</p></div></div>
         </div>
         <div id="manageTeamsContent"></div>
         <div class="captains-panel">

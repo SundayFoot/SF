@@ -19,3 +19,12 @@ Aucune nouvelle migration SQL n'est nécessaire pour le redesign UI/UX de V8.0 :
 
 ## PWA
 Le cache du service worker a été versionné en V8.0 afin que les téléphones récupèrent la nouvelle interface au lieu de conserver l'ancien CSS/JS en cache.
+
+
+## V8.1 — Mobile UI/UX
+- Refonte visuelle de la page Live Match mobile : scoreboard, maillots, chrono, buteurs, prochaine équipe et statistiques.
+- Navigation admin simplifiée : actions principales uniquement dans la barre basse mobile.
+- Ajout d'une flèche Retour dans les pages admin internes, sans déconnexion de l'application.
+- L'ordre manuel des équipes reste prioritaire pour le premier match.
+- Notifications : demande de permission sécurisée HTTPS, attente du Service Worker et bouton de test. Les notifications Realtime restent dépendantes de la connexion Supabase Realtime.
+- Cache PWA version V8.1.
