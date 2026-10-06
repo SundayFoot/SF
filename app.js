@@ -120,9 +120,10 @@ function editTeamPlayers(teamId) {
 
   let state = null;
   let timerId = null;
+  let registeredPlayerSuggestions = [];
 
-  const defaultNames = ["Rouge", "Vert", "Jaune", "Bleu", "Orange", "Violet", "Noir", "Blanc"];
-  const defaultColors = ["#ef4444", "#22c55e", "#eab308", "#3b82f6", "#f97316", "#a855f7", "#111827", "#f8fafc"];
+  const defaultNames = ["Sans maillot", "Rouge", "Bleu", "Jaune", "Vert", "Orange", "Violet", "Noir"];
+  const defaultColors = ["#f8fafc", "#ef4444", "#3b82f6", "#eab308", "#22c55e", "#f97316", "#a855f7", "#111827"];
   const teamColorChoices = [
     ["#ef4444", "Rouge"], ["#22c55e", "Vert"], ["#eab308", "Jaune"], ["#3b82f6", "Bleu"],
     ["#f97316", "Orange"], ["#a855f7", "Violet"], ["#111827", "Noir"], ["#f8fafc", "Blanc"]
@@ -216,17 +217,21 @@ function editTeamPlayers(teamId) {
   
 // V6.2 — timer pause/resume support
 function pauseMatchTimer() {
+    if (!requireAdminOnline()) return;
     if (accessMode !== "admin") { showToast("🔒 Action réservée à l’administrateur."); return; }
     if (!state || !state.active || !state.matchStarted || state.timerPaused) return;
     state.timerPaused = true;
+    state.timeExpired = false;
     stopTimer();
     saveState();
     renderGame();
 }
 
 function resumeMatchTimer() {
+    if (!requireAdminOnline()) return;
     if (accessMode !== "admin") { showToast("🔒 Action réservée à l’administrateur."); return; }
     if (!state || !state.active || !state.matchStarted || !state.timerPaused) return;
+    if (state.timeExpired) { showToast("⏱️ Le temps est écoulé : choisis le résultat du match."); return; }
     state.timerPaused = false;
     saveState();
     startTimer();
@@ -260,7 +265,10 @@ function renderTeamForm(draft = null) {
             <input data-field="captain" data-index="${i}" value="${escapeHtml(saved.captain || "")}" placeholder="Nom du capitaine" maxlength="60">
           </label>
           <label>Joueurs
-            <input data-field="players" data-index="${i}" value="${escapeHtml(saved.players || "")}" placeholder="Ex. Ali, Yassine, Karim" maxlength="300">
+            <div class="player-autocomplete-wrap">
+              <input data-field="players" data-index="${i}" value="${escapeHtml(saved.players || "")}" placeholder="Ex. Ali, Yassine, Karim — ou un nouveau joueur" maxlength="300" autocomplete="off">
+              <div class="player-autocomplete-list hidden" data-player-suggestions="${i}" aria-live="polite"></div>
+            </div>
           </label>
           <div class="player-editor" data-player-editor="${i}">
             <div class="player-editor-title">👥 Joueurs</div>
@@ -274,6 +282,7 @@ function renderTeamForm(draft = null) {
       `;
       els.teamForm.appendChild(entry);
       renderSetupPlayerEditor(entry, i);
+      bindSetupPlayerAutocomplete(entry, i);
     }
 
     els.teamForm.querySelectorAll("[data-remove-team]").forEach(btn => {
@@ -284,6 +293,69 @@ function renderTeamForm(draft = null) {
         els.teamCount.value = String(Math.max(3, Number(els.teamCount.value) - 1));
         renderTeamForm(current);
       });
+    });
+  }
+
+  async function refreshRegisteredPlayerSuggestions() {
+    if (!supabaseClient || accessMode !== "admin") return;
+    try {
+      const [allowed, registrations] = await Promise.all([
+        readAllowedPlayers(),
+        readRegistrations()
+      ]);
+      const names = [
+        ...(Array.isArray(allowed) ? allowed.map(p => p?.name) : []),
+        ...(Array.isArray(registrations) ? registrations.map(p => p?.name) : [])
+      ].map(v => String(v || "").trim()).filter(Boolean);
+      registeredPlayerSuggestions = Array.from(new Map(names.map(n => [n.toLocaleLowerCase(), n])).values())
+        .sort((a,b) => a.localeCompare(b, "fr"));
+      document.querySelectorAll("[data-field='players']").forEach(input => {
+        const entry = input.closest(".team-entry");
+        const index = Number(input.dataset.index);
+        if (entry) bindSetupPlayerAutocomplete(entry, index);
+      });
+    } catch (error) {
+      console.warn("Player suggestions unavailable:", error);
+    }
+  }
+
+  function bindSetupPlayerAutocomplete(entry, index) {
+    const input = entry?.querySelector(`[data-field="players"][data-index="${index}"]`);
+    const list = entry?.querySelector(`[data-player-suggestions="${index}"]`);
+    if (!input || !list) return;
+    if (input.dataset.autocompleteBound === "1") return;
+    input.dataset.autocompleteBound = "1";
+
+    const hide = () => list.classList.add("hidden");
+    const paint = () => {
+      const raw = String(input.value || "");
+      const parts = raw.split(",");
+      const current = String(parts[parts.length - 1] || "").trim();
+      const query = current.toLocaleLowerCase();
+      if (!query || !registeredPlayerSuggestions.length) { hide(); return; }
+      const existing = new Set(parts.slice(0, -1).map(v => v.trim().toLocaleLowerCase()).filter(Boolean));
+      const matches = registeredPlayerSuggestions
+        .filter(name => name.toLocaleLowerCase().startsWith(query) && !existing.has(name.toLocaleLowerCase()))
+        .slice(0, 8);
+      if (!matches.length) { hide(); return; }
+      list.innerHTML = matches.map(name => `<button type="button" class="player-suggestion-option" data-suggestion-name="${escapeHtml(name)}"><span>${escapeHtml(name)}</span><small>Joueur enregistré</small></button>`).join("");
+      list.classList.remove("hidden");
+    };
+
+    input.addEventListener("input", paint);
+    input.addEventListener("focus", paint);
+    input.addEventListener("blur", () => setTimeout(hide, 180));
+    list.addEventListener("mousedown", event => event.preventDefault());
+    list.addEventListener("click", event => {
+      const button = event.target.closest("[data-suggestion-name]");
+      if (!button) return;
+      const name = button.dataset.suggestionName || "";
+      const parts = String(input.value || "").split(",").map(v => v.trim()).filter(Boolean);
+      if (!parts.some(v => v.toLocaleLowerCase() === name.toLocaleLowerCase())) parts.push(name);
+      input.value = parts.join(", ") + ", ";
+      hide();
+      input.focus();
+      renderSetupPlayerEditor(entry, index);
     });
   }
 
@@ -301,6 +373,8 @@ function renderTeamForm(draft = null) {
       ? names.map((name, pIndex) => `<span class="player-chip">${escapeHtml(name)}<button type="button" class="player-remove-btn" data-remove-player="${index}" data-player-index="${pIndex}">×</button></span>`).join("")
       : `<span class="muted small">Aucun joueur</span>`;
     els.teamForm.querySelectorAll("[data-add-player]").forEach(btn => {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
       btn.addEventListener("click", () => {
         const entry = btn.closest(".team-entry");
         const input = entry?.querySelector('[data-field="players"]');
@@ -315,6 +389,8 @@ function renderTeamForm(draft = null) {
     });
 
     els.teamForm.querySelectorAll("[data-remove-player]").forEach(btn => {
+      if (btn.dataset.bound === "1") return;
+      btn.dataset.bound = "1";
       btn.addEventListener("click", () => {
         const entry = btn.closest(".team-entry");
         const input = entry?.querySelector('[data-field="players"]');
@@ -371,6 +447,7 @@ function renderTeamForm(draft = null) {
       finals: null,
       matchStarted: false,
       timerPaused: false,
+      timeExpired: false,
       phase: "league",
       phaseMatch: null,
       phaseMatchStarted: false,
@@ -402,6 +479,9 @@ function renderTeamForm(draft = null) {
   let tournamentNotificationChannel = null;
   let tournamentNotificationPollTimer = null;
   let tournamentNotificationLastId = null;
+  let adminConnectivityTimer = null;
+  let adminOnline = true;
+  let adminConnectivityChecking = false;
   const DEVICE_ID_KEY = "sf_registration_device_id_v1";
   const NOTIFY_PREF_KEY = "sf_notifications_enabled_v1";
   function getRegistrationDeviceId() {
@@ -482,6 +562,59 @@ function renderTeamForm(draft = null) {
   function startRegistrationStatusWatch(){clearInterval(registrationStatusTimer);if(accessMode!=="registration")return;registrationStatusTimer=setInterval(()=>{if(document.visibilityState==="visible")refreshMyRegistrationStatus(true).catch(()=>{});},20000);}
   function stopRegistrationStatusWatch(){clearInterval(registrationStatusTimer);registrationStatusTimer=null;}
 
+  function requireAdminOnline(action = "Cette action") {
+    if (accessMode !== "admin") { showToast("🔒 Action réservée à l’administrateur."); return false; }
+    if (!navigator.onLine || !adminOnline) { showToast("📡 Internet requis. L'application est en pause hors connexion."); return false; }
+    return true;
+  }
+
+  async function checkAdminConnectivity(force = false) {
+    if (accessMode !== "admin" || !supabaseClient || !onlineConfigured()) return false;
+    if (!navigator.onLine) { setAdminOnline(false); return false; }
+    if (adminConnectivityChecking && !force) return adminOnline;
+    adminConnectivityChecking = true;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4500);
+    try {
+      const url = `${window.SF_SUPABASE.url.replace(/\/$/, "")}/rest/v1/${SF_TABLE}?select=id&id=eq.${encodeURIComponent(SF_ROW_ID)}&limit=1`;
+      const response = await fetch(url, { method: "GET", cache: "no-store", signal: controller.signal, headers: { apikey: window.SF_SUPABASE.anonKey, Authorization: `Bearer ${window.SF_SUPABASE.anonKey}` } });
+      setAdminOnline(response.ok);
+      return response.ok;
+    } catch { setAdminOnline(false); return false; }
+    finally { clearTimeout(timeout); adminConnectivityChecking = false; }
+  }
+
+  function setAdminOnline(online) {
+    const changed = adminOnline !== !!online;
+    adminOnline = !!online;
+    document.body.classList.toggle("sf-offline-locked", accessMode === "admin" && !adminOnline);
+    document.getElementById("adminOfflineBanner")?.classList.toggle("hidden", !(accessMode === "admin" && !adminOnline));
+    if (adminOnline && changed && accessMode === "admin") {
+      showToast("🟢 Connexion Internet rétablie.");
+      remoteRead().then(remote => { if (remote && accessMode === "admin") { state = remote; migrateTeamColors(); renderGame(); if (typeof renderDashboard === "function") renderDashboard(); } });
+    }
+  }
+
+  function startAdminConnectivityWatch() {
+    clearInterval(adminConnectivityTimer);
+    if (accessMode !== "admin") return;
+    setAdminOnline(navigator.onLine);
+    checkAdminConnectivity(true);
+    adminConnectivityTimer = setInterval(() => checkAdminConnectivity(), 5000);
+  }
+
+  function stopAdminConnectivityWatch() {
+    if (adminConnectivityTimer) clearInterval(adminConnectivityTimer);
+    adminConnectivityTimer = null; adminConnectivityChecking = false;
+    document.body.classList.remove("sf-offline-locked");
+    document.getElementById("adminOfflineBanner")?.classList.add("hidden");
+  }
+
+  function setupNetworkListeners() {
+    window.addEventListener("offline", () => { if (accessMode === "admin") { stopTimer(); setAdminOnline(false); showToast("📡 Internet coupé : actions administrateur bloquées."); renderGame(); } });
+    window.addEventListener("online", () => { if (accessMode === "admin") checkAdminConnectivity(true); });
+  }
+
   function onlineConfigured() {
     return !!(window.SF_SUPABASE &&
       window.SF_SUPABASE.url &&
@@ -509,7 +642,7 @@ function renderTeamForm(draft = null) {
   }
 
   async function remoteWrite() {
-    if (!supabaseClient || !state || accessMode !== "admin") return;
+    if (!supabaseClient || !state || accessMode !== "admin" || !navigator.onLine || !adminOnline) return;
     const { data: sessionData } = await supabaseClient.auth.getSession();
     if (!sessionData?.session) return;
     const { error } = await supabaseClient.from(SF_TABLE).upsert({
@@ -521,7 +654,7 @@ function renderTeamForm(draft = null) {
   }
 
   function scheduleRemoteWrite(immediate = false) {
-    if (!supabaseClient || accessMode !== "admin" || !state) return;
+    if (!supabaseClient || accessMode !== "admin" || !state || !navigator.onLine || !adminOnline) return;
     if (immediate) {
       clearTimeout(onlineSyncTimer);
       onlineSyncTimer = null;
@@ -1466,7 +1599,8 @@ function renderTeamForm(draft = null) {
     });
   }
 
-  function showOnly(screenId, admin = false) {
+  let handlingBrowserBack = false;
+  function showOnly(screenId, admin = false, pushHistory = true) {
     const ids = [
       "accessScreen", "registrationScreen", "publicTeamsScreen", "liveScreen", "dashboardPage",
       "setupScreen", "registrationAdminScreen", "gameScreen", "manageTeamsPanel", "finalScreen"
@@ -1476,6 +1610,37 @@ function renderTeamForm(draft = null) {
     document.getElementById("mobileBottomNav")?.classList.toggle("hidden", !admin);
     document.getElementById("publicMobileNav")?.classList.add("hidden");
     document.getElementById(screenId)?.classList.remove("hidden");
+    if (pushHistory && !handlingBrowserBack) {
+      const current = history.state?.sfScreen;
+      if (current !== screenId) history.pushState({ sfScreen: screenId }, "", location.href);
+    }
+  }
+
+  function goBackInApp() {
+    if (history.state?.sfScreen) {
+      history.back();
+    } else if (accessMode === "admin") {
+      showDashboard();
+    } else {
+      showAccess();
+    }
+  }
+
+  function screenFromHistory(screenId) {
+    handlingBrowserBack = true;
+    try {
+      if (screenId === "dashboardPage" && accessMode === "admin") return showDashboard();
+      if (screenId === "setupScreen" && accessMode === "admin") return showSetup();
+      if (screenId === "registrationAdminScreen" && accessMode === "admin") return openRegistrationAdmin();
+      if (screenId === "gameScreen" && accessMode === "admin") return showGame();
+      if (screenId === "manageTeamsPanel" && accessMode === "admin") return showTeamManagementPage();
+      if (screenId === "liveScreen") return enterLiveMode();
+      if (screenId === "registrationScreen") return enterRegistrationMode();
+      if (screenId === "publicTeamsScreen") return enterPublicTeamsMode();
+      return showAccess();
+    } finally {
+      handlingBrowserBack = false;
+    }
   }
 
   async function restoreAdminSession() {
@@ -1485,6 +1650,10 @@ function renderTeamForm(draft = null) {
       const { data } = await supabaseClient.auth.getSession();
       if (data?.session?.user?.email === window.SF_SUPABASE?.adminEmail) {
         accessMode = "admin";
+        if (!navigator.onLine) { accessMode="none"; showAccess(); return; }
+        const connected = await checkAdminConnectivity(true);
+        if (!connected) { accessMode="none"; showAccess(); return; }
+        startAdminConnectivityWatch();
         const remote = await remoteRead();
         if (remote) { state = remote; migrateTeamColors(); }
         else { const local = loadState(); if (local) { state = local; migrateTeamColors(); } }
@@ -1499,6 +1668,7 @@ function renderTeamForm(draft = null) {
 
   function showAccess() {
     stopTimer();
+    stopAdminConnectivityWatch();
     stopRegistrationStatusWatch();
     stopTournamentNotifications();
     clearAdminIdleTimer();
@@ -1584,10 +1754,10 @@ function renderTeamForm(draft = null) {
     if (state.phase !== "complete" && state.tournamentWinnerId === null && state.phaseMatch && state.phase !== "league") {
       const m=state.phaseMatch, a=team(m.a), b=team(m.b);
       const phaseName=state.phase === "playoff" ? "MATCH ÉLIMINATOIRE" : state.phase === "semifinal" ? "DEMI-FINALE" : "FINALE";
-      matchHtml += `<div class="live-team-head"><div class="muted small">${phaseName}</div></div><div class="live-time" id="liveTimer">${formatTime(state.phaseSecondsLeft)}</div><div class="live-score"><div class="live-team"><div class="live-jersey">${teamJerseyHtml(a,m.a)}</div><strong style="color:${getTeamColor(a, m.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${m.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersA)}</div></div><div class="live-vs">VS</div><div class="live-team"><div class="live-jersey">${teamJerseyHtml(b,m.b)}</div><strong style="color:${getTeamColor(b, m.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${m.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(m.scorersB)}</div></div></div><p class="muted">${state.phaseMatchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
+      matchHtml += `<div class="live-team-head"><div class="muted small">${phaseName}</div></div><div class="live-time" id="liveTimer">${formatTime(state.phaseSecondsLeft)}</div><div class="live-score"><div class="live-team"><div class="live-jersey">${teamJerseyHtml(a,m.a)}</div><strong style="color:${getTeamColor(a, m.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${m.scoreA}</div></div><div class="live-vs">VS</div><div class="live-team"><div class="live-jersey">${teamJerseyHtml(b,m.b)}</div><strong style="color:${getTeamColor(b, m.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${m.scoreB}</div></div></div><p class="muted">${state.phaseMatchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
     } else if (state.active) {
       const a=team(state.active.a), b=team(state.active.b);
-      matchHtml += `<div class="live-team-head"><div class="muted small">MATCH #${state.matchNumber}</div></div><div class="live-time" id="liveTimer">${formatTime(state.secondsLeft)}</div><div class="live-score"><div class="live-team"><div class="live-jersey">${teamJerseyHtml(a,state.active.a)}</div><strong style="color:${getTeamColor(a, state.active.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${state.scoreA}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersA)}</div></div><div class="live-vs">VS</div><div class="live-team"><div class="live-jersey">${teamJerseyHtml(b,state.active.b)}</div><strong style="color:${getTeamColor(b, state.active.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${state.scoreB}</div><div class="live-scorers">⚽ ${scorerSummary(state.scorersB)}</div></div></div>`;
+      matchHtml += `<div class="live-team-head"><div class="muted small">MATCH #${state.matchNumber}</div></div><div class="live-time" id="liveTimer">${formatTime(state.secondsLeft)}</div><div class="live-score"><div class="live-team"><div class="live-jersey">${teamJerseyHtml(a,state.active.a)}</div><strong style="color:${getTeamColor(a, state.active.a)}">${escapeHtml(a?.name || "—")}</strong><div class="score">${state.scoreA}</div></div><div class="live-vs">VS</div><div class="live-team"><div class="live-jersey">${teamJerseyHtml(b,state.active.b)}</div><strong style="color:${getTeamColor(b, state.active.b)}">${escapeHtml(b?.name || "—")}</strong><div class="score">${state.scoreB}</div></div></div>`;
       matchHtml += `<p class="muted">${state.matchStarted ? "🟢 Match en cours" : "⏸️ Match préparé — en attente du démarrage"}</p>`;
     } else {
       matchHtml += `<h3>Pas de match en cours</h3>`;
@@ -1600,16 +1770,14 @@ function renderTeamForm(draft = null) {
       const final=state.finalResult, fa=final?team(final.winnerId):null, fb=final?team(final.loserId):null;
       const finalCard=final?`<div class="card live-card final-result-card"><div class="section-title">🏆 Résultat de la finale</div><div class="final-result-teams"><strong style="color:${getTeamColor(fa,final.winnerId)}">${escapeHtml(fa?.name||"—")}</strong><span class="final-result-score">${final.scoreA} - ${final.scoreB}</span><strong style="color:${getTeamColor(fb,final.loserId)}">${escapeHtml(fb?.name||"—")}</strong></div></div>`:"";
       const ranking=sortedTeams().map((t,i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(t.name)}</strong><span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span></div>`).join("");
-      const scorers=getScorerRanking().map(([name,goals],i)=>`<div class="rank-item"><strong>${i+1}. ${escapeHtml(name)}</strong><span class="badges">${goals} but${goals>1?"s":""}</span></div>`).join("");
       const teamTable=state.teams.map((t,i)=>`<div class="public-final-team"><div><span class="team-color-dot" style="background:${getTeamColor(t,i)}"></span><strong>${escapeHtml(t.name)}</strong></div><span class="badges">${Array.isArray(t.players)?t.players.length:0} joueurs</span></div>`).join("");
-      root.innerHTML=matchHtml+finalCard+`<div class="grid two"><div class="card live-card"><div class="section-title">🏆 Classement final</div>${ranking}</div><div class="card live-card"><div class="section-title">⚽ Buteurs</div>${scorers||`<p class="muted">Aucun buteur.</p>`}</div></div><div class="card live-card"><div class="section-title">👥 Équipes</div>${teamTable}</div>`;
+      root.innerHTML=matchHtml+finalCard+`<div class="card live-card"><div class="section-title">🏆 Classement final</div>${ranking}</div><div class="card live-card"><div class="section-title">👥 Équipes</div>${teamTable}</div>`;
       renderMobileLivePages(root);
       if(liveTimerId){clearInterval(liveTimerId);liveTimerId=null;}
       return;
     }
 
     const ranking = sortedTeams().map((t,i)=>`<div class="rank-item public-rank-item" style="--team-color:${getTeamColor(t,i)}"><div class="row-left"><span class="rank-position">${i+1}</span>${teamJerseyHtml(t,i,"public-rank-jersey")}<strong style="color:${getTeamColor(t,i)}">${escapeHtml(t.name)}</strong></div><span class="badges">${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</span></div>`).join("");
-    const scorers = getScorerRanking().map(([name,goals],i)=>`<div class="rank-item public-scorer-item"><div class="row-left"><span class="rank-position">${i+1}</span><span>⚽</span><strong>${escapeHtml(name)}</strong></div><span class="badges">${goals} but${goals>1?"s":""}</span></div>`).join("");
     const queue = (state.queue||[]).map((id,i)=>`<div class="rank-item public-rank-item" style="--team-color:${getTeamColor(team(id),id)}"><div class="row-left"><span class="rank-position">${i+1}</span>${teamJerseyHtml(team(id),id,"public-rank-jersey")}<strong style="color:${getTeamColor(team(id),id)}">${escapeHtml(team(id)?.name||"—")}</strong></div><span class="badges">À venir</span></div>`).join("");
     const teamCards = state.teams.map((t,i)=>`<div class="public-dashboard-team" style="--team-color:${getTeamColor(t,i)}">${teamJerseyHtml(t,i,"public-dashboard-jersey")}<strong>${escapeHtml(t.name)}</strong><span>${Array.isArray(t.players)?t.players.length:0} joueurs</span></div>`).join("");
     const currentMatchMarkup = matchHtml;
@@ -1621,7 +1789,7 @@ function renderTeamForm(draft = null) {
       <div class="public-dashboard-team-strip">${teamCards}</div>
       <div class="grid two public-dashboard-grid">
         <div class="card live-card public-dashboard-card"><div class="section-title">🏆 Classement</div>${ranking || `<p class="muted">Aucun classement.</p>`}</div>
-        <div class="card live-card public-dashboard-card"><div class="section-title">⚽ Meilleurs buteurs</div>${scorers || `<p class="muted">Aucun buteur.</p>`}</div>
+
       </div>
       <div class="card live-card public-dashboard-card"><div class="section-title">📋 Prochaines équipes</div><div class="live-list">${queue || `<p class="muted">Aucune équipe en attente.</p>`}</div></div>
       <div class="card live-card public-dashboard-card"><div class="section-title">📜 Matchs terminés</div>${(state.history||[]).slice().reverse().map(h=>`<div class="history-item"><strong>#${h.number}</strong><span>${escapeHtml(h.text)}</span></div>`).join("") || `<p class="muted">Aucun match terminé.</p>`}</div>`;
@@ -1639,13 +1807,6 @@ function renderTeamForm(draft = null) {
     const color=(t,i)=>getTeamColor(t,i);
     const active=state.active ? {a:team(state.active.a),b:team(state.active.b)} : null;
     const remaining=formatTime(state.phase!=="league"?state.phaseSecondsLeft:state.secondsLeft);
-    const scorersA=Array.isArray(state.scorersA)?state.scorersA:[];
-    const scorersB=Array.isArray(state.scorersB)?state.scorersB:[];
-    const scorerRows=[
-      ...scorersA.map(n=>({name:playerDisplayName(n),team:active?.a?.name||"Équipe A",side:"a"})),
-      ...scorersB.map(n=>({name:playerDisplayName(n),team:active?.b?.name||"Équipe B",side:"b"}))
-    ];
-    const scorerHtml=scorerRows.length?scorerRows.map((x,i)=>`<div class="mobile-live-scorer-row"><div class="mobile-live-scorer-icon">⚽</div><div class="mobile-live-scorer-main"><strong>${escapeHtml(x.name)}</strong><small style="color:${color(x.side==='a'?active?.a:active?.b,0)}">${escapeHtml(x.team)}</small></div><span class="mobile-live-scorer-minute">${i+1}</span></div>`).join(""):`<div class="mobile-live-empty">Aucun buteur pour le moment.</div>`;
     const ranking=sortedTeams().map((t,i)=>`<div class="mobile-live-list-row"><span class="mobile-rank">${i+1}</span>${teamJerseyHtml(t,i,"mobile-live-jersey")}<div><strong style="color:${color(t,i)}">${escapeHtml(t.name)}</strong><small>${t.points} pts · ${t.wins}V · ${t.draws}N · ${t.losses}D</small></div></div>`).join("");
     const history=(state.history||[]).slice().reverse().map(h=>`<div class="mobile-live-history-row"><span>#${h.number}</span><div>${escapeHtml(h.text)}</div></div>`).join("");
     const queue=(state.queue||[]).map((id,i)=>`<div class="mobile-live-next-row"><span class="mobile-next-number">${i+1}</span>${teamJerseyHtml(team(id),id,"mobile-next-jersey")}<div><strong style="color:${color(team(id),id)}">${escapeHtml(team(id)?.name||"—")}</strong><small>${i===0?"Prochaine équipe à entrer":"Position "+(i+1)}</small></div></div>`).join("");
@@ -1667,8 +1828,6 @@ function renderTeamForm(draft = null) {
       <section class="mobile-live-page is-active" data-live-page="live">
         ${current}
         <div class="mobile-live-stats-row"><div><strong>${state.teams.length}</strong><small>équipes</small></div><div><strong>${state.history?.length||0}</strong><small>matchs finis</small></div><div><strong>${sortedTeams()[0]?.name||"—"}</strong><small>leader</small></div></div>
-        <div class="card mobile-live-section"><div class="mobile-section-heading"><span><i class="fa-solid fa-futbol"></i> Buteurs du match</span><small>${scorerRows.length} but${scorerRows.length!==1?"s":""}</small></div>${scorerHtml}</div>
-        <div class="card mobile-live-section"><div class="mobile-section-heading"><span><i class="fa-solid fa-forward-step"></i> Prochaine équipe</span><small>Rotation</small></div>${queue?queue.split("</div>").slice(0,1).join("")+"</div>":`<div class="mobile-live-empty">Aucune équipe en attente.</div>`}</div>
         <div class="card mobile-live-section notification-panel"><div class="mobile-section-heading"><span><i class="fa-solid fa-bell"></i> Notifications</span></div><button type="button" class="primary full mobile-notification-btn">${notificationsEnabled()?"🔔 Notifications activées":"🔔 Activer les notifications"}</button><button type="button" class="secondary full mobile-test-notification-btn">🔔 Tester une notification</button><p class="muted small">Les annonces de buts et de changements de matchs sont envoyées en temps réel lorsque les notifications sont autorisées.</p></div>
       </section>
       <section class="mobile-live-page" data-live-page="ranking"><div class="card mobile-live-section"><div class="mobile-section-heading"><span><i class="fa-solid fa-trophy"></i> Classement</span></div>${ranking||`<div class="mobile-live-empty">Aucun classement.</div>`}</div></section>
@@ -1711,7 +1870,11 @@ function renderTeamForm(draft = null) {
     const { error }=await supabaseClient.auth.signInWithPassword({ email:window.SF_SUPABASE.adminEmail, password });
     if (error) { msg.textContent="Code incorrect ou compte administrateur non configuré."; return; }
     accessMode="admin";
+    if (!navigator.onLine) { accessMode="none"; msg.textContent="Connexion Internet obligatoire pour le mode administrateur."; return; }
     bindAdminActivity();
+    const connected = await checkAdminConnectivity(true);
+    if (!connected) { accessMode="none"; stopAdminConnectivityWatch(); msg.textContent="Connexion Internet obligatoire pour le mode administrateur."; return; }
+    startAdminConnectivityWatch();
     scheduleAdminIdleLogout();
     const remote=await remoteRead();
     if (remote) {
@@ -1722,6 +1885,7 @@ function renderTeamForm(draft = null) {
       if(local){state=local;migrateTeamColors();}
     }
     showDashboard();
+    refreshRegisteredPlayerSuggestions();
     showToast("Mode administrateur activé.");
   }
 
@@ -1779,13 +1943,11 @@ function renderTeamForm(draft = null) {
 
       if (state.secondsLeft === 0) {
         stopTimer();
-        if (state.scoreA === 0 && state.scoreB === 0) {
-          finishDraw();
-        } else {
-          // According to the requested rule, the normal draw case is 0-0.
-          // If goals were scored but nobody reached 2, the organizer decides.
-          showToast("Temps écoulé : choisis le gagnant.");
-        }
+        state.timerPaused = true;
+        state.timeExpired = true;
+        saveState();
+        renderGame();
+        showToast("⏱️ Temps écoulé : l'administrateur doit choisir le résultat.");
       }
     }, 1000);
   }
@@ -1799,6 +1961,7 @@ function renderTeamForm(draft = null) {
   }
 
   function startFirstMatch() {
+    if (!requireAdminOnline()) return;
     if (!state.manualFirstOrder) shuffleArray(state.queue);
     const firstA = state.queue.shift();
     const firstB = state.queue.shift();
@@ -1814,6 +1977,8 @@ function renderTeamForm(draft = null) {
     state.scorersB = [];
     state.secondsLeft = state.settings.matchMinutes * 60;
     state.matchStarted = false;
+    state.timerPaused = false;
+    state.timeExpired = false;
     saveState();
     showGame();
     renderGame();
@@ -1843,6 +2008,8 @@ function renderTeamForm(draft = null) {
     state.scorersB = [];
     state.secondsLeft = state.settings.matchMinutes * 60;
     state.matchStarted = false;
+    state.timerPaused = false;
+    state.timeExpired = false;
     saveState();
     renderGame();
     showMatchAnnouncement([nextId], "Entre");
@@ -1850,6 +2017,7 @@ function renderTeamForm(draft = null) {
   }
 
   function finishWinner(side) {
+    if (!requireAdminOnline()) return;
     if (accessMode !== "admin") { showToast("🔒 Action réservée à l’administrateur."); return; }
     if (!state?.active || !state.matchStarted) return;
 
@@ -1874,6 +2042,9 @@ function renderTeamForm(draft = null) {
       teamAId: state.active.a,
       teamBId: state.active.b,
       type: "win",
+      winnerId,
+      scoreA: state.scoreA,
+      scoreB: state.scoreB,
       text: `${winner.name} gagne ${state.scoreA}-${state.scoreB} contre ${loser.name}. ${winner.name} reste sur le terrain.`,
       scorersA: [...(state.scorersA || [])],
       scorersB: [...(state.scorersB || [])]
@@ -1891,6 +2062,7 @@ function renderTeamForm(draft = null) {
   }
 
   function finishDraw() {
+    if (!requireAdminOnline()) return;
     if (accessMode !== "admin") { showToast("🔒 Action réservée à l’administrateur."); return; }
     if (!state?.active || !state.matchStarted) return;
 
@@ -1916,6 +2088,9 @@ function renderTeamForm(draft = null) {
       teamAId: state.active.a,
       teamBId: state.active.b,
       type: "draw",
+      winnerId: null,
+      scoreA: state.scoreA,
+      scoreB: state.scoreB,
       text: `Égalité ${a.name} ${state.scoreA}-${state.scoreB} ${b.name}. Les deux sortent.`,
       scorersA: [...(state.scorersA || [])],
       scorersB: [...(state.scorersB || [])]
@@ -1959,9 +2134,12 @@ function renderTeamForm(draft = null) {
   }
 
   function startCurrentMatch() {
+    if (!requireAdminOnline()) return;
     if (accessMode !== "admin") { showToast("🔒 Action réservée à l’administrateur."); return; }
     if (!state?.active || state.matchStarted) return;
     state.matchStarted = true;
+    state.timerPaused = false;
+    state.timeExpired = false;
     state.secondsLeft = state.settings.matchMinutes * 60;
     saveState();
     scheduleRemoteWrite(true);
@@ -1976,18 +2154,15 @@ function renderTeamForm(draft = null) {
     if (!Array.isArray(state.scorersB)) state.scorersB = [];
   }
 
-  function addGoal(side, scorerName = "") {
+  function addGoal(side) {
+    if (!requireAdminOnline()) return;
     if (accessMode !== "admin") { showToast("🔒 Action réservée à l’administrateur."); return; }
     if (!state?.active || !state.matchStarted) return;
 
-    ensureScorerState();
-
     if (side === "A") {
       state.scoreA += 1;
-      state.scorersA.push(scorerName || "Buteur non renseigné");
     } else if (side === "B") {
       state.scoreB += 1;
-      state.scorersB.push(scorerName || "Buteur non renseigné");
     } else {
       return;
     }
@@ -2012,30 +2187,27 @@ function renderTeamForm(draft = null) {
     }
   }
 
-  function scorerSummary(names) {
-    if (!Array.isArray(names) || !names.length) return "Aucun buteur";
-    const counts = new Map();
-    names.forEach(name => counts.set(name, (counts.get(name) || 0) + 1));
-    return [...counts.entries()].map(([name, count]) =>
-      `${escapeHtml(name)}${count > 1 ? ` ×${count}` : ""}`
-    ).join(" · ");
+  function parseHistoryScores(h) {
+    if (Number.isFinite(Number(h.scoreA)) && Number.isFinite(Number(h.scoreB))) return [Number(h.scoreA), Number(h.scoreB)];
+    const m=String(h.text||"").match(/(\d+)\s*-\s*(\d+)/);
+    return m?[Number(m[1]),Number(m[2])]:[0,0];
+  }
+  function hydrateHistory() {
+    (state?.history||[]).forEach(h=>{ const [a,b]=parseHistoryScores(h); h.scoreA=a; h.scoreB=b; if(h.type==="draw") h.winnerId=null; else if(h.winnerId===undefined||h.winnerId===null) h.winnerId=a>b?h.teamAId:b>a?h.teamBId:null; });
+  }
+  function recalculateLeagueStats() {
+    if(!state?.teams)return; hydrateHistory();
+    state.teams.forEach(t=>{t.wins=0;t.draws=0;t.losses=0;t.points=0;t.goalsFor=0;t.goalsAgainst=0;});
+    (state.history||[]).forEach(h=>{ const a=state.teams[h.teamAId],b=state.teams[h.teamBId]; if(!a||!b)return; const [sa,sb]=parseHistoryScores(h); a.goalsFor+=sa;a.goalsAgainst+=sb;b.goalsFor+=sb;b.goalsAgainst+=sa; if(h.type==="draw"||h.winnerId==null){a.draws++;b.draws++;a.points++;b.points++;return;} const w=state.teams[h.winnerId],l=h.winnerId===h.teamAId?b:a; if(w){w.wins++;w.points+=3;l.losses++;} });
+  }
+  function editHistoryResult(index) {
+    if(!requireAdminOnline())return; hydrateHistory(); const h=state?.history?.[index]; if(!h)return; const a=state.teams[h.teamAId],b=state.teams[h.teamBId]; if(!a||!b)return; const [oa,ob]=parseHistoryScores(h); const ow=h.type==="draw"?"D":h.winnerId===h.teamAId?"A":"B";
+    const choice=(prompt(`Match #${h.number}\n${a.name} vs ${b.name}\n\nA = ${a.name} gagne\nB = ${b.name} gagne\nD = égalité`,ow)||"").trim().toUpperCase(); if(!["A","B","D"].includes(choice)){showToast("Modification annulée.");return;}
+    const sa=Number(prompt(`Score de ${a.name}`,String(oa))), sb=Number(prompt(`Score de ${b.name}`,String(ob))); if(!Number.isInteger(sa)||sa<0||!Number.isInteger(sb)||sb<0){showToast("Score invalide.");return;} if(choice==="D"&&sa!==sb){showToast("Une égalité doit avoir deux scores identiques.");return;} if(choice!=="D"&&sa===sb){showToast("Un gagnant doit avoir un score différent.");return;}
+    h.scoreA=sa;h.scoreB=sb;h.type=choice==="D"?"draw":"win";h.winnerId=choice==="A"?h.teamAId:choice==="B"?h.teamBId:null; const w=choice==="A"?a:choice==="B"?b:null; h.text=w?`${w.name} gagne ${sa}-${sb} contre ${w.id===a.id?b.name:a.name}. ${w.name} reste sur le terrain.`:`Égalité ${a.name} ${sa}-${sb} ${b.name}. Les deux sortent.`; h.correctedAt=new Date().toISOString();
+    recalculateLeagueStats(); saveState(); scheduleRemoteWrite(true); renderGame(); showToast("✅ Résultat corrigé. Le nombre de matchs reste inchangé.");
   }
 
-  function playerButtonsHtml(team, side, phase = false) {
-    const players = Array.isArray(team?.players) ? team.players : [];
-    if (!players.length) {
-      return `<div class="players-empty">Aucun joueur renseigné</div>`;
-    }
-
-    return `<div class="scorer-area">
-      <div class="scorer-label">Buteur :</div>
-      <div class="player-buttons">
-        ${players.map((player, index) => `
-          <button type="button" class="player-btn" data-${phase ? "pplayer" : "player"}side="${side}" data-${phase ? "pplayer" : "player"}name="${escapeHtml(player)}">${escapeHtml(player)}</button>
-        `).join("")}
-      </div>
-    </div>`;
-  }
 
   function sortedTeams() {
     return [...state.teams].sort((a, b) =>
@@ -2046,37 +2218,6 @@ function renderTeamForm(draft = null) {
     );
   }
 
-  function getScorerRanking() {
-    const counts = new Map();
-    const add = (name) => {
-      const clean = String(name || "").trim();
-      if (!clean || clean === "Buteur non renseigné") return;
-      counts.set(clean, (counts.get(clean) || 0) + 1);
-    };
-
-    (state.history || []).forEach(h => {
-      (h.scorersA || []).forEach(add);
-      (h.scorersB || []).forEach(add);
-    });
-    (state.scorersA || []).forEach(add);
-    (state.scorersB || []).forEach(add);
-    (state.phaseMatch?.scorersA || []).forEach(add);
-    (state.phaseMatch?.scorersB || []).forEach(add);
-    (state.semifinalResults || []).forEach(r => {
-      (r.scorersA || []).forEach(add);
-      (r.scorersB || []).forEach(add);
-    });
-    if (state.finals?.playoff) {
-      (state.finals.playoff.scorersA || []).forEach(add);
-      (state.finals.playoff.scorersB || []).forEach(add);
-    }
-    if (state.finalResult) {
-      (state.finalResult.scorersA || []).forEach(add);
-      (state.finalResult.scorersB || []).forEach(add);
-    }
-
-    return [...counts.entries()].sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  }
 
   function renderGame() {
     if (!state) return;
@@ -2114,10 +2255,10 @@ function renderTeamForm(draft = null) {
         pauseBtn.disabled = accessMode !== "admin";
       }
       if (resumeBtn) {
-        resumeBtn.classList.toggle("hidden", !state.matchStarted || !state.timerPaused);
+        resumeBtn.classList.toggle("hidden", !state.matchStarted || !state.timerPaused || !!state.timeExpired);
         resumeBtn.disabled = accessMode !== "admin";
       }
-      if (state.matchStarted && state.timerPaused) els.preMatchInfo.textContent = "⏸️ Chrono en pause.";
+      if (state.matchStarted && state.timerPaused) els.preMatchInfo.textContent = state.timeExpired ? "⏱️ Temps écoulé — choisissez le résultat." : "⏸️ Chrono en pause.";
     } else {
       els.preMatchCard.classList.add("hidden");
       els.activeMatchCard.classList.add("hidden");
@@ -2133,15 +2274,6 @@ function renderTeamForm(draft = null) {
       els.teamBName.style.color = getTeamColor(b, state.active.b);
       els.scoreA.textContent = state.scoreA;
       els.scoreB.textContent = state.scoreB;
-      ensureScorerState();
-      const playersA = document.getElementById("playersA");
-      const playersB = document.getElementById("playersB");
-      if (playersA) playersA.innerHTML = playerButtonsHtml(a,"A",false);
-      if (playersB) playersB.innerHTML = playerButtonsHtml(b,"B",false);
-      const scorersAEl = document.getElementById("scorersA");
-      const scorersBEl = document.getElementById("scorersB");
-      if (scorersAEl) scorersAEl.innerHTML = `⚽ ${scorerSummary(state.scorersA)}`;
-      if (scorersBEl) scorersBEl.innerHTML = `⚽ ${scorerSummary(state.scorersB)}`;
       els.leaderPoints.textContent = sortedTeams()[0]?.points ?? 0;
       els.winABtn.textContent = `🏆 ${a?.name || "Équipe A"} gagne`;
       els.winBBtn.textContent = `🏆 ${b?.name || "Équipe B"} gagne`;
@@ -2176,22 +2308,10 @@ function renderTeamForm(draft = null) {
       </div>`
     ).join("");
 
-    const scorerRankingList = document.getElementById("scorerRankingList");
-    if (scorerRankingList) {
-      const scorers = getScorerRanking();
-      scorerRankingList.innerHTML = scorers.length
-        ? scorers.map(([name, goals], i) => `<div class="rank-item"><strong>${i + 1}. ${escapeHtml(name)}</strong><span class="badges">${goals} but${goals > 1 ? "s" : ""}</span></div>`).join("")
-        : `<div class="muted">Aucun but enregistré.</div>`;
-    }
 
     els.historyList.innerHTML = state.history.length
       ? state.history.slice().reverse().map(h => {
-          const aScorers = Array.isArray(h.scorersA) && h.scorersA.length ? scorerSummary(h.scorersA) : "";
-          const bScorers = Array.isArray(h.scorersB) && h.scorersB.length ? scorerSummary(h.scorersB) : "";
-          const scorerLine = (aScorers || bScorers)
-            ? `<div class="history-scorers">⚽ ${aScorers || "—"} ${bScorers ? ` | ${bScorers}` : ""}</div>`
-            : "";
-          return `<div class="history-item"><strong>#${h.number}</strong><div><span>${escapeHtml(h.text)}</span>${scorerLine}</div></div>`;
+          const editBtn = accessMode === "admin" ? `<button type="button" class="secondary history-edit-btn" data-history-edit="${state.history.indexOf(h)}">✏️ Modifier</button>` : ""; return `<div class="history-item"><strong>#${h.number}</strong><div class="history-main"><span>${escapeHtml(h.text)}</span></div>${editBtn}</div>`;
         }).join("")
       : `<div class="muted">Aucun match terminé.</div>`;
 
@@ -2599,6 +2719,7 @@ function renderTeamForm(draft = null) {
     stopTimer();
     showOnly("setupScreen", true);
     els.openRegistrationAdminBtn?.classList.remove("hidden");
+    refreshRegisteredPlayerSuggestions();
     scheduleAdminIdleLogout();
   }
 
@@ -2676,17 +2797,12 @@ function renderTeamForm(draft = null) {
     },1000);
   }
 
-  function addPhaseGoal(side, scorerName = "") {
+  function addPhaseGoal(side) {
     if (!state?.phaseMatch || !state.phaseMatchStarted) return;
-    if (!Array.isArray(state.phaseMatch.scorersA)) state.phaseMatch.scorersA=[];
-    if (!Array.isArray(state.phaseMatch.scorersB)) state.phaseMatch.scorersB=[];
-
     if (side==="A") {
       state.phaseMatch.scoreA++;
-      state.phaseMatch.scorersA.push(scorerName || "Buteur non renseigné");
     } else if (side==="B") {
       state.phaseMatch.scoreB++;
-      state.phaseMatch.scorersB.push(scorerName || "Buteur non renseigné");
     } else {
       return;
     }
@@ -2718,7 +2834,10 @@ function renderTeamForm(draft = null) {
     if (state.phase==="semifinal") {
       state.semifinalResults=state.semifinalResults||[];
       state.semifinalResults.push({winnerId,loserId,scoreA:m.scoreA,scoreB:m.scoreB,label:m.label,scorersA:[...(m.scorersA||[])],scorersB:[...(m.scorersB||[])]});
-      if (state.semifinalResults.length===1) {
+      if (state.finals?.top4?.length===3) {
+        const directFinalist=state.finals.top4[0];
+        preparePhaseMatch("final",directFinalist,winnerId,"Finale");
+      } else if (state.semifinalResults.length===1) {
         const top4=state.finals.top4;
         preparePhaseMatch("semifinal",top4[1],top4[2],"Demi-finale 2");
       } else {
@@ -2742,8 +2861,20 @@ function renderTeamForm(draft = null) {
   }
 
   function launchSemifinals() {
+    if (state?.phase === "league") {
+      stopTimer();
+      state.active = null;
+      state.matchStarted = false;
+      state.timerPaused = true;
+    }
     const r=sortedTeams();
-    if (r.length<4) { showToast("Il faut au moins 4 équipes pour les demi-finales."); return; }
+    if (r.length===3) {
+      state.finals={top4:[r[0].id,r[1].id,r[2].id]};
+      state.semifinalResults=[];
+      preparePhaseMatch("semifinal",r[1].id,r[2].id,"Demi-finale — 2e vs 3e");
+      return;
+    }
+    if (r.length<4) { showToast("Il faut au moins 3 équipes pour les demi-finales."); return; }
     if (r.length>=5 && r[3].points===r[4].points) {
       state.finals={top4:[r[0].id,r[1].id,r[2].id,null],playoff:{fourthId:r[3].id,fifthId:r[4].id}};
       preparePhaseMatch("playoff",r[3].id,r[4].id,"Match éliminatoire pour la 4e place");
@@ -2759,8 +2890,6 @@ function renderTeamForm(draft = null) {
     const a=state.teams[state.phaseMatch.a], b=state.teams[state.phaseMatch.b];
     const dur=state.phase==="playoff"?"5 min":state.phase==="semifinal"?"7 min":"10 min";
     const goals=state.phase==="final"?3:2;
-    const scorersA = state.phaseMatch.scorersA || [];
-    const scorersB = state.phaseMatch.scorersB || [];
     return `<div class="phase-card">
       <div class="phase-title">${phaseLabel()}</div>
       <div class="phase-sub">${escapeHtml(state.phaseMatch.label)} · ${dur} · ${goals} buts</div>
@@ -2768,22 +2897,20 @@ function renderTeamForm(draft = null) {
         <div class="team-side">
           ${teamImageHtml(a)}
           <div class="team-name">${escapeHtml(a.name)}</div>
-          <div class="score">${state.phaseMatch.scoreA}</div>
-          ${state.phaseMatchStarted ? `<button class="goal" data-pgoal="A">⚽ But</button>${playerButtonsHtml(a,"A",true)}<div class="scorer-list">⚽ ${scorerSummary(scorersA)}</div>` : ""}
+          <div class="score">${state.phaseMatch.scoreA}</div>${state.phaseMatchStarted ? `<button class="goal" data-pgoal="A">⚽ But — ${escapeHtml(a.name)}</button>` : ""}
         </div>
         <div class="versus">VS</div>
         <div class="team-side">
           ${teamImageHtml(b)}
           <div class="team-name">${escapeHtml(b.name)}</div>
-          <div class="score">${state.phaseMatch.scoreB}</div>
-          ${state.phaseMatchStarted ? `<button class="goal" data-pgoal="B">⚽ But</button>${playerButtonsHtml(b,"B",true)}<div class="scorer-list">⚽ ${scorerSummary(scorersB)}</div>` : ""}
+          <div class="score">${state.phaseMatch.scoreB}</div>${state.phaseMatchStarted ? `<button class="goal" data-pgoal="B">⚽ But — ${escapeHtml(b.name)}</button>` : ""}
         </div>
       </div>
       <div class="stat"><span>Temps</span><strong>${formatTime(state.phaseSecondsLeft)}</strong></div>
       ${!state.phaseMatchStarted
         ? `<button id="startPhaseMatchBtn" class="primary full">▶️ Commencer ${phaseLabel().toLowerCase()}</button>`
         : `<div class="action-grid"><button class="win" data-pwin="A">🏆 ${escapeHtml(a.name)} gagne</button><button class="win" data-pwin="B">🏆 ${escapeHtml(b.name)} gagne</button></div>`}
-      <p class="hint">Le chrono démarre seulement après le bouton. Cliquer sur le nom d'un joueur enregistre directement son but.</p>
+      <p class="hint">Le chrono démarre seulement après le bouton. Chaque but est enregistré uniquement au niveau de l'équipe.</p>
     </div>`;
   }
 
@@ -2812,7 +2939,7 @@ function renderTeamForm(draft = null) {
   }
 
   function renderFinals() {
-    if (!state || state.teams.length < 4) {
+    if (!state || state.teams.length < 3) {
       els.finalScreen?.classList.add("hidden");
       return;
     }
@@ -2826,7 +2953,7 @@ function renderTeamForm(draft = null) {
 
     if (state.phase === "league") {
       html += `<div class="phase-card"><div class="phase-title">🏁 Phase finale</div>
-        <p class="muted">Quand la phase de classement est terminée, passe aux demi-finales.</p>
+        <p class="muted">Quand la phase de classement est terminée, passe aux demi-finales. Avec 3 équipes : la 1re va directement en finale et les 2e/3e jouent la demi-finale.</p>
         <button id="goSemifinalsBtn" class="primary full">🏆 Passer aux demi-finales</button></div>`;
     } else if (state.phaseMatch) {
       html += phaseMatchHtml();
@@ -2864,7 +2991,6 @@ function renderTeamForm(draft = null) {
     const startBtn=document.getElementById("startPhaseMatchBtn");
     if(startBtn) startBtn.addEventListener("click",startPhaseMatch);
     els.finalContent.querySelectorAll("[data-pgoal]").forEach(b=>b.addEventListener("click",()=>addPhaseGoal(b.dataset.pgoal)));
-    els.finalContent.querySelectorAll("[data-pplayerside]").forEach(b=>b.addEventListener("click",()=>addPhaseGoal(b.dataset.pplayerside,b.dataset.pplayername)));
     els.finalContent.querySelectorAll("[data-pwin]").forEach(b=>b.addEventListener("click",()=>finishPhaseMatch(b.dataset.pwin)));
   }
 
@@ -2904,12 +3030,14 @@ function renderTeamForm(draft = null) {
   }
 
   async function beginTournament() {
+    if (!requireAdminOnline()) return;
     if (accessMode !== "admin") { showToast("🔒 Seul l'administrateur peut créer un tournoi."); return; }
     const teams = await collectTeams();
     const minutes = Math.max(1, Math.min(30, Number(els.matchMinutes.value) || 5));
 
     state = createEmptyState(teams, minutes);
     state.queue = teams.map((_, index) => index);
+    state.manualFirstOrder = true;
 
     startFirstMatch();
     showToast("Tournoi créé et sauvegardé.");
@@ -3000,6 +3128,7 @@ function renderTeamForm(draft = null) {
   }
 
   function newTournament() {
+    if (!requireAdminOnline()) return;
     if (accessMode !== "admin") { showToast("🔒 Seul l'administrateur peut créer un nouveau tournoi."); return; }
     const ok = confirm("Commencer un nouveau tournoi ? Le tournoi actuel est déjà sauvegardé automatiquement sur ce téléphone. L'export reste disponible comme copie de secours.");
     if (!ok) return;
@@ -3050,29 +3179,26 @@ function renderTeamForm(draft = null) {
   els.startMatchBtn.addEventListener("click", startCurrentMatch);
   els.manageTeamsBtn?.addEventListener("click", openManageTeams);
   els.openRegistrationAdminBtn?.addEventListener("click", openRegistrationAdmin);
-  document.getElementById("registrationAdminBackBtn")?.addEventListener("click", closeRegistrationAdmin);
-  document.getElementById("setupBackBtn")?.addEventListener("click", showDashboard);
-  document.getElementById("gameBackBtn")?.addEventListener("click", showDashboard);
+  document.getElementById("registrationAdminBackBtn")?.addEventListener("click", goBackInApp);
+  document.getElementById("setupBackBtn")?.addEventListener("click", goBackInApp);
+  document.getElementById("gameBackBtn")?.addEventListener("click", goBackInApp);
 
   els.drawPlayersBtn?.addEventListener("click", drawRegisteredPlayers);
-  els.closeManageTeamsBtn?.addEventListener("click", closeManageTeams);
+  els.closeManageTeamsBtn?.addEventListener("click", goBackInApp);
   els.saveTeamPlayersBtn?.addEventListener("click", saveManagedTeams);
   document.getElementById("pauseMatchBtn")?.addEventListener("click", pauseMatchTimer);
   document.getElementById("resumeMatchBtn")?.addEventListener("click", resumeMatchTimer);
   els.goalABtn.addEventListener("click", () => addGoal("A"));
   els.goalBBtn.addEventListener("click", () => addGoal("B"));
-  els.activeMatchCard.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-playerside]");
-    if (!button) return;
-    addGoal(button.dataset.playerside, button.dataset.playername);
-  });
   els.winABtn.addEventListener("click", () => finishWinner("A"));
   els.winBBtn.addEventListener("click", () => finishWinner("B"));
   els.drawBtn.addEventListener("click", finishDraw);
   els.exportBtn.addEventListener("click", exportTournament);
   els.importInput.addEventListener("change", importTournament);
+  els.historyList.addEventListener("click", event => { const btn=event.target.closest("[data-history-edit]"); if(btn) editHistoryResult(Number(btn.dataset.historyEdit)); });
 
   initSupabase();
+  setupNetworkListeners();
   if (supabaseClient) {
     supabaseClient.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT") { clearAdminIdleTimer(); accessMode = "none"; showAccess(); }
@@ -3084,12 +3210,12 @@ function renderTeamForm(draft = null) {
   document.getElementById("backAccessBtn")?.addEventListener("click", () => document.getElementById("adminLoginBox")?.classList.add("hidden"));
   document.getElementById("liveAccessBtn")?.addEventListener("click", enterLiveMode);
   document.getElementById("publicTeamsAccessBtn")?.addEventListener("click", enterPublicTeamsMode);
-  document.getElementById("publicTeamsBackBtn")?.addEventListener("click", showAccess);
+  document.getElementById("publicTeamsBackBtn")?.addEventListener("click", goBackInApp);
   document.getElementById("registerAccessBtn")?.addEventListener("click", enterRegistrationMode);
   document.getElementById("registerPlayerBtn")?.addEventListener("click", submitRegistration);
-  document.getElementById("registrationBackBtn")?.addEventListener("click", showAccess);
+  document.getElementById("registrationBackBtn")?.addEventListener("click", goBackInApp);
   els.registrationName?.addEventListener("change", () => {});
-  document.getElementById("liveBackBtn")?.addEventListener("click", showAccess);
+  document.getElementById("liveBackBtn")?.addEventListener("click", goBackInApp);
   document.getElementById("liveNotificationsBtn")?.addEventListener("click",toggleNotifications);
   document.getElementById("registrationNotificationsBtn")?.addEventListener("click",toggleNotifications);
   document.querySelectorAll("[data-public-action]").forEach(btn => {
@@ -3124,6 +3250,12 @@ function renderTeamForm(draft = null) {
         renderTeamForm();
       }
     });
+  });
+
+  if (!history.state?.sfScreen) history.replaceState({ sfScreen: "accessScreen" }, "", location.href);
+  window.addEventListener("popstate", (event) => {
+    const screen = event.state?.sfScreen || "accessScreen";
+    screenFromHistory(screen);
   });
 
   renderTeamForm();

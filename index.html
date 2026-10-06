@@ -19,7 +19,9 @@
   <script src="supabase-config.js"></script>
 </head>
 <body>
-  <main class="app">
+  
+  <div id="adminOfflineBanner" class="admin-offline-banner hidden" role="alert">📡 <strong>Connexion Internet perdue</strong><span>Le tournoi est en pause. Aucune action administrateur n’est possible hors connexion.</span></div>
+<main class="app">
     <section id="accessScreen" class="screen">
       <div class="card access-card">
         <div class="access-brand"><img src="assets/football-mark.svg" alt="" aria-hidden="true"><h1>Sunday Football</h1></div>
@@ -243,16 +245,12 @@
             <div id="teamAName" class="team-name">Équipe A</div>
             <div id="scoreA" class="score">0</div>
             <button id="goalABtn" class="goal">⚽ But</button>
-            <div id="playersA"></div>
-            <div id="scorersA" class="scorer-list">⚽ Aucun buteur</div>
           </div>
           <div class="versus">VS</div>
           <div class="team-side">
             <div id="teamBName" class="team-name">Équipe B</div>
             <div id="scoreB" class="score">0</div>
             <button id="goalBBtn" class="goal">⚽ But</button>
-            <div id="playersB"></div>
-            <div id="scorersB" class="scorer-list">⚽ Aucun buteur</div>
           </div>
         </div>
 
@@ -267,7 +265,7 @@
         </div>
 
         <button id="drawBtn" class="draw">🤝 Égalité — 0-0 après 5 min</button>
-        <p class="hint">Une équipe atteint 2 buts : elle gagne et reste. Si le temps expire à 0-0 : les deux sortent et les deux prochaines équipes entrent.</p>
+        <p class="hint">Une équipe atteint 2 buts : elle gagne et reste. Si le temps expire, le chrono se met en pause et l’administrateur choisit le résultat.</p>
       </div>
 
       <div class="grid two">
@@ -279,11 +277,6 @@
           <div class="section-title">🏆 Classement</div>
           <div id="rankingList"></div>
         </div>
-      </div>
-
-      <div class="card">
-        <div class="section-title">⚽ Classement des buteurs</div>
-        <div id="scorerRankingList"></div>
       </div>
 
       <div class="card">
